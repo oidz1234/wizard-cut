@@ -18,7 +18,7 @@
 
     <main class="main-content">
         <div class="container">
-            <h1>Text-Based Video Editor</h1>
+            <h1>Text <i>Based</i> Video Editor</h1>
             
             <div id="upload-section">
                 <div class="upload-area" id="drop-area">
@@ -39,9 +39,11 @@
                         <div class="controls">
                             <button id="select-btn" class="btn btn-outline-primary">🪄 Select Text</button>
                             <button id="clear-btn" class="btn btn-outline-secondary">🧹 Clear Selections</button>
-                            <button id="preview-btn" class="btn btn-info">👁️ Preview Edits</button>
-                            <button id="cut-btn" class="btn btn-danger">✂️ Process Edits</button>
-                            <button id="download-btn" class="btn btn-success" disabled>📥 Download Edited Video</button>
+                            <button id="download-btn" class="btn btn-success">✂️ Create & Download Edited Video</button>
+                        </div>
+                        
+                        <div class="keyboard-shortcuts">
+                            <p><span class="shortcut-key">X</span> - Press to mark selected text for deletion</p>
                         </div>
                         
                         <div id="selections-list" class="d-none">
@@ -60,6 +62,12 @@
         </div>
     </main>
 
+    <footer>
+        <div class="container">
+            <p>Crafted with a bit of magic ✨ by the team at <a href="https://SWMGLabs.com">SWMG Labs</a></p>
+        </div>
+    </footer>
+    
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay" style="display: none;">
         <div class="wizard-spinner">🔮</div>

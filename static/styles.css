@@ -590,3 +590,55 @@ h1::after {
         align-self: flex-end;
     }
 }
+/* Footer */
+footer {
+    padding: 20px 0;
+    background-color: var(--primary);
+    color: white;
+    text-align: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+}
+
+footer p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+/* Add padding to the bottom of the body to prevent content from being hidden behind the footer */
+body {
+    padding-bottom: 60px;
+}
+
+/* Keyboard Shortcuts Section */
+.keyboard-shortcuts {
+    margin: 15px 0;
+    padding: 10px;
+    background-color: var(--light);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+}
+
+.keyboard-shortcuts p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+}
+
+.shortcut-key {
+    display: inline-block;
+    background-color: var(--dark);
+    color: white;
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-right: 8px;
+    font-family: monospace;
+    font-weight: bold;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}

@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let editedVideoUrl = null;
     let previewVideoUrl = null;
     let isShowingEditedVideo = false;
+    let isProcessing = false;
+    let hasShownKeyboardShortcutTip = false;
     
     // DOM Elements
     const dropArea = document.getElementById('drop-area');
@@ -24,8 +26,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const transcriptContent = document.getElementById('transcript-content');
     const selectBtn = document.getElementById('select-btn');
     const clearBtn = document.getElementById('clear-btn');
-    const previewBtn = document.getElementById('preview-btn');
-    const cutBtn = document.getElementById('cut-btn');
     const downloadBtn = document.getElementById('download-btn');
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingMessage = document.getElementById('loading-message');
@@ -43,9 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dropArea.addEventListener('drop', handleDrop);
     selectBtn.addEventListener('click', toggleSelectionMode);
     clearBtn.addEventListener('click', clearSelections);
-    previewBtn.addEventListener('click', previewEdits);
-    cutBtn.addEventListener('click', processVideoEdit);
-    downloadBtn.addEventListener('click', downloadEditedVideo);
+    downloadBtn.addEventListener('click', processAndDownloadVideo);
     videoPlayer.addEventListener('timeupdate', highlightCurrentWord);
     
     // Context menu setup
@@ -373,6 +371,15 @@ document.addEventListener('DOMContentLoaded', function() {
             selectionsList.classList.remove('d-none');
             selectionsContainer.innerHTML = '';
             
+            // Hide keyboard shortcut tip after first selection
+            if (!hasShownKeyboardShortcutTip) {
+                const keyboardShortcuts = document.querySelector('.keyboard-shortcuts');
+                if (keyboardShortcuts) {
+                    keyboardShortcuts.style.display = 'none';
+                }
+                hasShownKeyboardShortcutTip = true;
+            }
+            
             selections.forEach((selection, index) => {
                 const selectionItem = document.createElement('div');
                 selectionItem.className = 'selection-item';
@@ -391,6 +398,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         } else {
             selectionsList.classList.add('d-none');
+            
+            // Show keyboard shortcut tip again if all selections are removed
+            if (hasShownKeyboardShortcutTip) {
+                const keyboardShortcuts = document.querySelector('.keyboard-shortcuts');
+                if (keyboardShortcuts) {
+                    keyboardShortcuts.style.display = 'block';
+                }
+                hasShownKeyboardShortcutTip = false;
+            }
         }
     }
     
@@ -429,7 +445,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (editedVideoUrl || previewVideoUrl) {
             videoPlayer.src = `/video/${sessionId}/${originalFilename}`;
             videoPlayer.load();
-            downloadBtn.disabled = true;
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = "✂️ Create & Download Edited Video";
             editedVideoUrl = null;
             previewVideoUrl = null;
             isShowingEditedVideo = false;
@@ -437,78 +454,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function previewEdits() {
+    function processAndDownloadVideo() {
+        if (isProcessing) return;
+        
         if (selections.length === 0) {
             alert('Please select at least one segment to remove.');
             return;
         }
         
-        showLoading('✨ Conjuring your preview...');
-        
-        // Sort selections by start time
-        const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
-        
-        // Calculate adjusted timestamps for transcript after editing
-        adjustedTranscriptData = calculateAdjustedTimestamps(transcriptData, sortedSelections);
-        
-        // Simulate progress
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress += 5;
-            if (progress > 90) {
-                clearInterval(progressInterval);
-            }
-            updateProgressBar(progress);
-        }, 1000);
-        
-        fetch('/edit', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                session_id: sessionId,
-                filename: originalFilename,
-                selections: sortedSelections,
-                preview_only: true
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            clearInterval(progressInterval);
-            updateProgressBar(100);
-            
-            if (data.success) {
-                previewVideoUrl = `/video/${sessionId}/${data.preview_file}`;
-                
-                // Update video player with preview
-                videoPlayer.src = previewVideoUrl;
-                videoPlayer.load();
-                videoPlayer.play();
-                
-                isShowingEditedVideo = true;
-                
-                hideLoading();
-            } else {
-                alert('Error: ' + data.error);
-                hideLoading();
-            }
-        })
-        .catch(error => {
-            clearInterval(progressInterval);
-            console.error('Error:', error);
-            alert('An error occurred while generating the preview.');
-            hideLoading();
-        });
-    }
-    
-    function processVideoEdit() {
-        if (selections.length === 0) {
-            alert('Please select at least one segment to remove.');
+        // If we already have an edited video, just download it
+        if (editedVideoUrl) {
+            window.location.href = editedVideoUrl.replace('/video/', '/download/');
             return;
         }
         
-        showLoading('🧙‍♂️ Casting powerful editing spells on your video...');
+        isProcessing = true;
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = "Processing...";
+        
+        showLoading('🧙‍♂️ Casting "remove text - a 5th level spell! on your video...');
         
         // Sort selections by start time
         const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
@@ -556,11 +520,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Enable download button
                 downloadBtn.disabled = false;
+                downloadBtn.textContent = "📥 Download Edited Video";
                 
                 hideLoading();
+                isProcessing = false;
+                
+                // Auto-download after a slight delay
+                setTimeout(() => {
+                    window.location.href = editedVideoUrl.replace('/video/', '/download/');
+                }, 1000);
+                
             } else {
                 alert('Error: ' + data.error);
                 hideLoading();
+                isProcessing = false;
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = "✂️ Create & Download Edited Video";
             }
         })
         .catch(error => {
@@ -568,13 +543,10 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error:', error);
             alert('An error occurred while processing the video.');
             hideLoading();
+            isProcessing = false;
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = "✂️ Create & Download Edited Video";
         });
-    }
-    
-    function downloadEditedVideo() {
-        if (editedVideoUrl) {
-            window.location.href = editedVideoUrl.replace('/video/', '/download/');
-        }
     }
     
     function highlightCurrentWord() {
