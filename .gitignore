@@ -1,0 +1,50 @@
+# Vim swap, backup, and undo files
+*.swp
+*.swo
+*.swn
+*.un~
+*.bak
+*.tmp
+*.orig
+*.undo
+*~
+
+# Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment directories
+venv/
+.env/
+.virtualenv/
+
+# pip and dependency files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# mypy cache
+.mypy_cache/
+
+# pytest cache
+.pytest_cache/
+
+# Coverage reports
+.coverage
+htmlcov/
+.coverage.*
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.eggs/
+
+# IDE and editor-specific files
+.vscode/
+.idea/
+
