@@ -1,4 +1,4 @@
-# WizardCut: Text-Based Video Editor
+# WizardCut: Text *Based* Video Editor
 
 ![WizardCut Logo](static/images/wizard.png)
 
