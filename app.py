@@ -420,5 +420,15 @@ def cleanup_old_sessions():
     
     return jsonify({'success': True, 'sessions_removed': count})
 
+# Clean up a specific session
+@app.route('/cleanup_session/<session_id>', methods=['POST'])
+def cleanup_session(session_id):
+    session_path = os.path.join(app.config['PROCESSED_FOLDER'], session_id)
+    if os.path.isdir(session_path):
+        shutil.rmtree(session_path)
+        return jsonify({'success': True, 'message': 'Session data cleared successfully'})
+    else:
+        return jsonify({'success': False, 'error': 'Session not found'}), 404
+
 if __name__ == '__main__':
     app.run(debug=True)

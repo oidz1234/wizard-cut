@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectBtn = document.getElementById('select-btn');
     const clearBtn = document.getElementById('clear-btn');
     const downloadBtn = document.getElementById('download-btn');
+    const cleanupBtn = document.getElementById('cleanup-btn');
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingMessage = document.getElementById('loading-message');
     const progressBar = document.getElementById('progress-bar');
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
     selectBtn.addEventListener('click', toggleSelectionMode);
     clearBtn.addEventListener('click', clearSelections);
     downloadBtn.addEventListener('click', processAndDownloadVideo);
+    cleanupBtn.addEventListener('click', cleanupServerData);
     videoPlayer.addEventListener('timeupdate', highlightCurrentWord);
     
     // Context menu setup
@@ -472,7 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
         downloadBtn.disabled = true;
         downloadBtn.textContent = "Processing...";
         
-        showLoading('🧙‍♂️ Casting "remove text - a 5th level spell! on your video...');
+        showLoading('🧙‍♂️ Casting remove text  (a 5th level spell) on your video...');
         
         // Sort selections by start time
         const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
@@ -528,6 +530,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Auto-download after a slight delay
                 setTimeout(() => {
                     window.location.href = editedVideoUrl.replace('/video/', '/download/');
+                    
+                    // Show the cleanup button once download has started
+                    cleanupBtn.classList.remove('d-none');
                 }, 1000);
                 
             } else {
@@ -708,5 +713,42 @@ document.addEventListener('DOMContentLoaded', function() {
         progressBar.style.width = `${percent}%`;
         progressBar.textContent = `${percent}%`;
         progressBar.setAttribute('aria-valuenow', percent);
+    }
+    
+    // Function to clean up server-side data
+    function cleanupServerData() {
+        if (!sessionId) return;
+        
+        // Confirm before deleting
+        if (!confirm('Are you sure you want to delete all data for this video from the server?')) {
+            return;
+        }
+        
+        cleanupBtn.disabled = true;
+        cleanupBtn.textContent = "Cleaning up...";
+        
+        fetch(`/cleanup_session/${sessionId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Server data cleaned up successfully!');
+                cleanupBtn.textContent = "🗑️ Data Cleared";
+                cleanupBtn.classList.add('btn-outline-danger');
+                cleanupBtn.classList.remove('btn-danger');
+                cleanupBtn.disabled = true;
+            } else {
+                alert('Error: ' + data.error);
+                cleanupBtn.disabled = false;
+                cleanupBtn.textContent = "🗑️ Clear Server Data";
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while cleaning up the server data.');
+            cleanupBtn.disabled = false;
+            cleanupBtn.textContent = "🗑️ Clear Server Data";
+        });
     }
 });
