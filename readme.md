@@ -6,6 +6,8 @@ Select text to remove it from your video
 
 It's basically a wrapper around whisper and ffmpeg but looks pretty wizard.
 
+![Alt text](wizard_cut_screenshot.png?raw=true "Title")
+
 ## ✨ Features
 
 - **Automatic Transcription**: Upload your video and get an accurate transcript with timestamps
