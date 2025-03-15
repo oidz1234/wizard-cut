@@ -8,6 +8,9 @@ It's basically a wrapper around whisper and ffmpeg but looks pretty wizard.
 
 ![Alt text](wizard_cut_screenshot.png?raw=true "Title")
 
+It's a lil janky bit it's 90% of the way, you may need to do some cleaning up in
+a proper editor.
+
 ## ✨ Features
 
 - **Automatic Transcription**: Upload your video and get an accurate transcript with timestamps
