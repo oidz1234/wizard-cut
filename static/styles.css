@@ -172,12 +172,53 @@ h1::after {
     overflow: hidden;
     margin-bottom: 20px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #000;
 }
 
 .video-player {
     width: 100%;
     background-color: #000;
     display: block;
+    transform-origin: center center;
+    transition: transform 0.3s ease-out;
+}
+
+.mouse-indicator {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 0 4px rgba(124, 77, 255, 0.5), 0 0 10px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    display: none;
+    opacity: 0.8;
+    transition: width 0.2s ease, height 0.2s ease;
+}
+
+.zoom-indicator {
+    position: absolute;
+    background-color: rgba(124, 77, 255, 0.2);
+    border: 2px dashed rgba(124, 77, 255, 0.8);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 9;
+    display: none;
+}
+
+.zoom-active .video-wrapper {
+    cursor: zoom-in;
 }
 
 /* Controls */
@@ -186,6 +227,260 @@ h1::after {
     flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 20px;
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: var(--light);
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.zoom-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.zoom-record-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.custom-player-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+}
+
+.custom-player-controls button {
+    width: 40px;
+    height: 30px;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 16px !important;
+}
+
+#custom-pause-btn {
+    font-family: sans-serif !important;
+    font-weight: bold;
+}
+
+/* Record Zoom Button */
+#record-zoom-btn {
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+#record-zoom-btn i {
+    margin-right: 5px;
+}
+
+.status-badge {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background-color: #e0e0e0;
+    color: #666;
+}
+
+.status-badge.recording {
+    background-color: rgba(244, 67, 54, 0.2);
+    color: var(--danger);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+/* Zoom Timeline */
+.zoom-timeline {
+    position: relative;
+    height: 60px;
+    background-color: #f0f0f0;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+}
+
+.timeline-scale {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background-color: rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    padding: 0 5px;
+}
+
+.timeline-marker {
+    font-size: 0.7rem;
+    color: #666;
+}
+
+.zoom-events-container {
+    position: relative;
+    height: 40px;
+    top: 20px;
+}
+
+.timeline-cut-segments {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 15px;
+    z-index: 5;
+}
+
+.timeline-cut-segment {
+    position: absolute;
+    height: 10px;
+    background: linear-gradient(to bottom, rgba(244, 67, 54, 0.3), rgba(244, 67, 54, 0.5));
+    border: 1px solid rgba(244, 67, 54, 0.6);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.timeline-cut-segment:hover {
+    height: 15px;
+    background: linear-gradient(to bottom, rgba(244, 67, 54, 0.4), rgba(244, 67, 54, 0.6));
+    transform: translateY(-2px);
+}
+
+.zoom-event {
+    position: absolute;
+    height: 30px;
+    background: linear-gradient(to bottom, rgba(124, 77, 255, 0.2), rgba(124, 77, 255, 0.4));
+    border: 1px solid rgba(124, 77, 255, 0.6);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.zoom-event:hover {
+    background: linear-gradient(to bottom, rgba(124, 77, 255, 0.3), rgba(124, 77, 255, 0.5));
+    transform: translateY(-2px);
+}
+
+.zoom-event.selected {
+    background: linear-gradient(to bottom, rgba(94, 53, 177, 0.3), rgba(94, 53, 177, 0.5));
+    border: 2px solid rgba(94, 53, 177, 0.8);
+}
+
+.zoom-event-label {
+    font-size: 0.7rem;
+    color: var(--dark);
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 5px;
+}
+
+.timeline-cursor {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: var(--danger);
+    transition: left 0.1s linear;
+    pointer-events: none;
+    display: none;
+}
+
+.timeline-cursor::after {
+    content: "";
+    position: absolute;
+    top: -5px;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background-color: var(--danger);
+    border-radius: 50%;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+}
+
+/* Toggle Switch */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    gap: 5px;
+    font-size: 0.9rem;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: var(--accent);
+}
+
+input:focus + .toggle-slider {
+    box-shadow: 0 0 1px var(--accent);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
 }
 
 /* Transcript Container */
@@ -201,6 +496,71 @@ h1::after {
 
 #transcript-content {
     padding-bottom: 40px;
+}
+
+/* Zoom highlight styling */
+.word.zoom-highlight, .silence-marker.zoom-highlight {
+    background-color: rgba(33, 150, 243, 0.25);
+    border-bottom: 2px solid var(--info);
+    position: relative;
+}
+
+.word.zoom-highlight:hover::after, .silence-marker.zoom-highlight:hover::after {
+    content: attr(data-zoom-level) 'x';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--info);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    z-index: 10;
+}
+
+.zoom-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(33, 150, 243, 0.2);
+    color: var(--info);
+    font-weight: bold;
+    border-radius: 3px;
+    padding: 2px 6px;
+    margin-right: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.zoom-icon:hover {
+    background-color: rgba(33, 150, 243, 0.4);
+}
+
+.zoom-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background-color: rgba(244, 67, 54, 0.2);
+    color: var(--danger);
+    border-radius: 50%;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    margin-left: 4px;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+}
+
+.zoom-remove:hover {
+    opacity: 1;
+    background-color: rgba(244, 67, 54, 0.4);
+    transform: scale(1.1);
 }
 
 /* Word and Silence Styling */
@@ -257,7 +617,7 @@ h1::after {
 }
 
 /* Selections List */
-#selections-list {
+#selections-list, #zoom-events-list {
     background-color: white;
     border-radius: 8px;
     padding: 15px;
@@ -265,7 +625,7 @@ h1::after {
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 
-#selections-list h5 {
+#selections-list h5, #zoom-events-list h5 {
     color: var(--primary);
     margin-bottom: 15px;
     font-size: 1.2rem;
@@ -273,7 +633,7 @@ h1::after {
     padding-bottom: 8px;
 }
 
-.selection-item {
+.selection-item, .zoom-event-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -284,7 +644,7 @@ h1::after {
     transition: all 0.2s ease;
 }
 
-.selection-item:hover {
+.selection-item:hover, .zoom-event-item:hover {
     background-color: rgba(124, 77, 255, 0.1);
 }
 

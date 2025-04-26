@@ -1,0 +1,333 @@
+/* Enhanced Video Player Styles for WizardCut */
+
+/* ===== Video Container & Wrapper ===== */
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    background-color: #000;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: box-shadow 0.3s ease;
+}
+
+.video-wrapper:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.video-wrapper.zoom-active {
+    cursor: zoom-in;
+}
+
+/* ===== VideoJS Player ===== */
+.video-js {
+    width: 100% !important;
+    height: 100% !important;
+    font-family: inherit;
+}
+
+/* Make the actual video element stable for zooming */
+.video-js video {
+    position: absolute;
+    transform-origin: center center;
+    transition: transform 0.3s ease-out;
+    will-change: transform;
+}
+
+/* Fix for VideoJS responsive mode */
+.vjs-fluid:not(.vjs-audio-only-mode) {
+    padding-top: 0 !important;
+    height: 100% !important;
+}
+
+/* Improve control bar visibility */
+.video-js .vjs-control-bar {
+    background-color: rgba(0, 0, 0, 0.7);
+    height: 3em;
+    padding: 0 1em;
+    backdrop-filter: blur(4px);
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+}
+
+/* Hide controls during zoom operations */
+.video-js.vjs-zoom-active .vjs-control-bar {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: translateY(100%);
+}
+
+/* Show controls on hover */
+.video-js:hover .vjs-control-bar {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* Improve button styling */
+.video-js .vjs-control {
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+}
+
+.video-js .vjs-control:hover {
+    opacity: 1;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+/* ===== Big Play Button ===== */
+.video-js .vjs-big-play-button {
+    background-color: rgba(124, 77, 255, 0.8);
+    border: none;
+    border-radius: 50%;
+    height: 80px;
+    width: 80px;
+    line-height: 80px;
+    transform: scale(1);
+    transition: transform 0.3s ease, background-color 0.3s ease;
+}
+
+.video-js .vjs-big-play-button:hover {
+    background-color: rgba(124, 77, 255, 1);
+    transform: scale(1.1);
+}
+
+.video-js .vjs-big-play-button .vjs-icon-placeholder:before {
+    font-size: 50px;
+    line-height: 80px;
+}
+
+/* ===== Progress Bar ===== */
+.video-js .vjs-progress-control {
+    min-height: 1em;
+    padding: 0;
+}
+
+.video-js .vjs-progress-control:hover .vjs-progress-holder {
+    font-size: 1.2em;
+}
+
+.video-js .vjs-progress-holder {
+    margin: 0;
+    height: 0.5em;
+    border-radius: 0.5em;
+    transition: height 0.2s ease, font-size 0.2s ease;
+}
+
+.video-js .vjs-play-progress {
+    background-color: rgba(124, 77, 255, 0.9);
+    border-radius: 0.5em;
+}
+
+.video-js .vjs-play-progress:before {
+    color: rgb(124, 77, 255);
+    font-size: 0.9em;
+    top: -0.3em;
+}
+
+.video-js .vjs-load-progress {
+    background: rgba(124, 77, 255, 0.3);
+    border-radius: 0.5em;
+}
+
+.video-js .vjs-load-progress div {
+    background: rgba(124, 77, 255, 0.4);
+}
+
+/* ===== Volume Control ===== */
+.video-js .vjs-volume-panel {
+    margin-right: 0.5em;
+}
+
+.video-js .vjs-volume-control {
+    width: 5em;
+    margin-right: 0.5em;
+}
+
+.video-js .vjs-volume-bar {
+    margin: 1.35em 0.45em;
+    height: 0.3em;
+    border-radius: 0.3em;
+}
+
+.video-js .vjs-volume-level {
+    background-color: rgba(124, 77, 255, 0.9);
+    border-radius: 0.3em;
+    height: 0.3em;
+}
+
+/* ===== Mouse Indicator ===== */
+.mouse-indicator {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 0 4px rgba(124, 77, 255, 0.5), 0 0 10px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 30;
+    display: none;
+    opacity: 0.8;
+    transition: width 0.2s ease, height 0.2s ease;
+}
+
+/* ===== Timeline ===== */
+.zoom-timeline {
+    position: relative;
+    height: 60px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+    margin-top: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.timeline-scale {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background-color: rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    padding: 0 5px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.timeline-marker {
+    font-size: 0.7rem;
+    color: #555;
+    padding-top: 3px;
+}
+
+.zoom-events-container {
+    position: relative;
+    height: 40px;
+    top: 20px;
+}
+
+.zoom-event {
+    position: absolute;
+    height: 30px;
+    background: linear-gradient(to bottom, rgba(124, 77, 255, 0.2), rgba(124, 77, 255, 0.4));
+    border: 1px solid rgba(124, 77, 255, 0.6);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.zoom-event:hover {
+    background: linear-gradient(to bottom, rgba(124, 77, 255, 0.3), rgba(124, 77, 255, 0.5));
+    transform: translateY(-2px);
+}
+
+.zoom-event.selected {
+    background: linear-gradient(to bottom, rgba(94, 53, 177, 0.3), rgba(94, 53, 177, 0.5));
+    border: 2px solid rgba(94, 53, 177, 0.8);
+}
+
+.zoom-event-label {
+    font-size: 0.7rem;
+    color: #333;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 5px;
+}
+
+.timeline-cursor {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: #ff4444;
+    transition: left 0.1s linear;
+    pointer-events: none;
+    display: none;
+    z-index: 10;
+}
+
+.timeline-cursor::after {
+    content: "";
+    position: absolute;
+    top: -5px;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background-color: #ff4444;
+    border-radius: 50%;
+}
+
+/* ===== Zoom Controls ===== */
+.zoom-controls {
+    display: flex;
+    justify-content: space-between;
+    margin: 10px 0;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.zoom-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.zoom-mode-select select {
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+    font-size: 0.9rem;
+}
+
+.zoom-record-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-badge {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background-color: transparent;
+}
+
+.status-badge.recording {
+    background-color: rgba(255, 68, 68, 0.2);
+    color: #ff4444;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+/* ===== Responsive Adjustments ===== */
+@media (max-width: 768px) {
+    .zoom-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .video-js .vjs-big-play-button {
+        height: 60px;
+        width: 60px;
+        line-height: 60px;
+    }
+    
+    .video-js .vjs-big-play-button .vjs-icon-placeholder:before {
+        font-size: 40px;
+        line-height: 60px;
+    }
+}

@@ -1,4 +1,4 @@
-// Enhanced Main Script for WizardCut Video Editor
+// Main Application Code
 document.addEventListener('DOMContentLoaded', function() {
     // State
     let sessionId = null;
@@ -16,8 +16,21 @@ document.addEventListener('DOMContentLoaded', function() {
     let isProcessing = false;
     let hasShownKeyboardShortcutTip = false;
     
+    // Video.js player reference
+    let player = null;
+    
     // Zoom and tracking state
+    let zoomLevel = 1; // Current zoom level
+    let zoomMode = 'none'; // Current zoom mode: 'none', 'simple', or 'drag'
+    let zoomPoint = { x: 0.5, y: 0.5 }; // Center point for zooming
+    let isDragging = false; // Is the user currently dragging the video
+    let dragStart = { x: 0, y: 0 }; // Starting position for drag
+    
+    // Zoom recording state
     let zoomEvents = []; // Array to store zoom events
+    let isRecordingZoom = false; // Is currently recording zoom events
+    let recordingStartTime = null; // When did the current recording start
+    let currentZoomEvent = null; // Current zoom event being recorded
     
     // DOM Elements
     const dropArea = document.getElementById('drop-area');
@@ -40,13 +53,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectionsList = document.getElementById('selections-list');
     const contextMenu = document.getElementById('custom-context-menu');
     const contextMenuCut = document.getElementById('context-menu-cut');
-    const customPlayBtn = document.getElementById('custom-play-btn');
-    const customPauseBtn = document.getElementById('custom-pause-btn');
     
     // Zoom control elements
     const zoomInBtn = document.getElementById('zoom-in-btn');
     const zoomOutBtn = document.getElementById('zoom-out-btn');
     const zoomResetBtn = document.getElementById('zoom-reset-btn');
+    const zoomModeSelect = document.getElementById('zoom-mode-select');
     const recordZoomBtn = document.getElementById('record-zoom-btn');
     const zoomRecordStatus = document.getElementById('zoom-record-status');
     const zoomTimeline = document.getElementById('zoom-timeline');
@@ -67,175 +79,70 @@ document.addEventListener('DOMContentLoaded', function() {
     downloadBtn.addEventListener('click', processAndDownloadVideo);
     cleanupBtn.addEventListener('click', cleanupServerData);
     
-    // Custom play/pause controls
-    customPlayBtn.addEventListener('click', () => {
-        if (window.videoJsIntegration) {
-            const player = window.videoJsIntegration.getPlayer();
-            if (player && player.bigPlayButton && player.bigPlayButton.el_) {
-                // Handle the first play (big play button is visible)
-                if (player.paused() && player.bigPlayButton.el_.style.display !== 'none') {
-                    // Simulate a click on the big play button to start initial playback
-                    player.bigPlayButton.hide();
-                }
-            }
-            window.videoJsIntegration.play();
-        }
-    });
-    
-    customPauseBtn.addEventListener('click', () => {
-        if (window.videoJsIntegration) {
-            window.videoJsIntegration.pause();
-        }
-    });
-    
     // Context menu setup
     transcriptContainer.addEventListener('contextmenu', handleContextMenu);
     contextMenuCut.addEventListener('click', markSelectionForCut);
     document.addEventListener('click', hideContextMenu);
     
     // Keyboard shortcut for marking text to cut
-    document.addEventListener('keydown', function(e) {
-        // Let the videoJsIntegration handle video-related shortcuts
-        if (e.target.closest('#video-wrapper')) return;
-        
-        // 'x' key for marking text to cut
-        if (e.key === 'x' || e.key === 'X') {
-            // Get the current text selection
-            const selection = window.getSelection();
-            if (selection.toString().trim() !== '') {
-                markSelectionForCut();
-                e.preventDefault(); // Prevent default 'x' action
-            }
-        }
+    document.addEventListener('keydown', handleKeyboardShortcut);
+    
+    // Zoom and tracking event listeners
+    zoomInBtn.addEventListener('click', () => changeZoom(0.25));
+    zoomOutBtn.addEventListener('click', () => changeZoom(-0.25));
+    zoomResetBtn.addEventListener('click', resetZoom);
+    zoomModeSelect.addEventListener('change', handleZoomModeChange);
+    videoWrapper.addEventListener('mousemove', handleMouseMove);
+    videoWrapper.addEventListener('click', handleVideoClick);
+    videoWrapper.addEventListener('mousedown', handleMouseDown);
+    videoWrapper.addEventListener('mouseup', handleMouseUp);
+    videoWrapper.addEventListener('mouseleave', () => {
+        if (isDragging) handleMouseUp();
+        if (mouseIndicator) mouseIndicator.style.display = 'none';
     });
     
-    // Zoom control buttons
-    zoomInBtn.addEventListener('click', () => {
-        if (window.videoJsIntegration) {
-            // Get current zoom level and add 0.25
-            const currentZoom = parseFloat(getComputedStyle(document.querySelector('.video-js video')).transform.split(',')[0].slice(7)) || 1;
-            window.videoJsIntegration.applyZoom(Math.min(5, currentZoom + 0.25));
-        }
-    });
+    // Zoom recording event listeners
+    recordZoomBtn.addEventListener('click', toggleZoomRecording);
     
-    zoomOutBtn.addEventListener('click', () => {
-        if (window.videoJsIntegration) {
-            // Get current zoom level and subtract 0.25
-            const currentZoom = parseFloat(getComputedStyle(document.querySelector('.video-js video')).transform.split(',')[0].slice(7)) || 1;
-            window.videoJsIntegration.applyZoom(Math.max(1, currentZoom - 0.25));
-        }
-    });
-    
-    zoomResetBtn.addEventListener('click', () => {
-        if (window.videoJsIntegration) {
-            window.videoJsIntegration.resetZoom();
-        }
-    });
-    
-    // Zoom recording
-    recordZoomBtn.addEventListener('click', function() {
-        if (window.videoJsIntegration) {
-            // Cache the original button dimensions and position
-            const rect = this.getBoundingClientRect();
-            const width = this.offsetWidth;
-            const height = this.offsetHeight;
-            
-            // Toggle zoom recording state
-            const isRecording = this.classList.contains('btn-danger');
-            
-            if (!isRecording) {
-                // Start recording
-                this.classList.remove('btn-outline-primary');
-                this.classList.add('btn-danger');
-                this.innerHTML = '<i class="fas fa-stop"></i> Stop Zoom';
-                
-                // Maintain the button dimensions
-                this.style.width = width + 'px';
-                this.style.minWidth = width + 'px';
-                
-                if (zoomRecordStatus) {
-                    zoomRecordStatus.textContent = 'Recording Zoom';
-                    zoomRecordStatus.classList.add('recording');
-                }
-            } else {
-                // Stop recording
-                this.classList.remove('btn-danger');
-                this.classList.add('btn-outline-primary');
-                this.innerHTML = '<i class="fas fa-video"></i> Record Zoom';
-                
-                // Maintain the button dimensions
-                this.style.width = width + 'px';
-                this.style.minWidth = width + 'px';
-                
-                if (zoomRecordStatus) {
-                    zoomRecordStatus.textContent = '';
-                    zoomRecordStatus.classList.remove('recording');
-                }
-            }
-            
-            window.videoJsIntegration.toggleZoomRecording();
-        }
-    });
-    
-    // Listen for zoom recording events from videoJsIntegration
-    document.addEventListener('zoom-recording-started', function() {
-        if (recordZoomBtn) {
-            recordZoomBtn.classList.remove('btn-outline-primary');
-            recordZoomBtn.classList.add('btn-danger');
-            recordZoomBtn.innerHTML = '<i class="fas fa-stop"></i> Stop Zoom';
-            
-            if (zoomRecordStatus) {
-                zoomRecordStatus.textContent = 'Recording Zoom';
-                zoomRecordStatus.classList.add('recording');
-            }
-        }
-    });
-    
-    document.addEventListener('zoom-recording-stopped', function() {
-        if (recordZoomBtn) {
-            recordZoomBtn.classList.remove('btn-danger');
-            recordZoomBtn.classList.add('btn-outline-primary');
-            recordZoomBtn.innerHTML = '<i class="fas fa-video"></i> Record Zoom';
-            
-            if (zoomRecordStatus) {
-                zoomRecordStatus.textContent = '';
-                zoomRecordStatus.classList.remove('recording');
-            }
-        }
-    });
-    
-    // Timeline click
-    zoomTimeline.addEventListener('click', handleTimelineClick);
-    
-    function handleTimelineClick(e) {
-        if (!window.videoJsIntegration || !zoomTimeline) return;
-        
-        // If the click is on a cut segment or zoom event, let their own handlers work
-        if (e.target.classList.contains('timeline-cut-segment') || 
-            e.target.classList.contains('zoom-event') ||
-            e.target.classList.contains('zoom-event-label')) {
-            return;
+    // Video.js integration
+    function initPlayer(url) {
+        // If a Video.js player already exists, dispose it first
+        if (player) {
+            player.dispose();
         }
         
-        // Get click position relative to timeline
-        const rect = zoomTimeline.getBoundingClientRect();
-        const clickPosition = (e.clientX - rect.left) / rect.width;
+        // Initialize Video.js
+        player = videojs('video-player', {
+            controls: true,
+            autoplay: false,
+            fluid: true,
+            playbackRates: [0.5, 1, 1.5, 2]
+        });
         
-        // Set video time based on click position
-        const duration = window.videoJsIntegration.getDuration();
-        if (duration) {
-            window.videoJsIntegration.seekTo(clickPosition * duration);
-        }
+        // Set the source
+        player.src({
+            src: url,
+            type: getVideoType(url)
+        });
+        
+        // Add custom event handlers
+        player.on('timeupdate', handleTimeUpdate);
+        player.on('loadedmetadata', updateTimelineScale);
+        player.on('play', handleVideoPlay);
+        player.on('pause', handleVideoPause);
+        player.on('seeking', handleVideoSeeking);
+        
+        return player;
     }
     
-    // Video player time update
-    document.addEventListener('video-time-update', handleVideoTimeUpdate);
-    
-    // Video metadata loaded
-    document.addEventListener('video-metadata-loaded', handleVideoMetadataLoaded);
-    
-    // Zoom event recorded
-    document.addEventListener('zoom-event-recorded', handleZoomEventRecorded);
+    // Helper to determine video type from URL
+    function getVideoType(url) {
+        if (url.endsWith('.mp4')) return 'video/mp4';
+        if (url.endsWith('.webm')) return 'video/webm';
+        if (url.endsWith('.ogv')) return 'video/ogg';
+        if (url.endsWith('.mkv')) return 'video/x-matroska';
+        return 'video/mp4'; // Default
+    }
     
     // Functions
     function handleDragOver(e) {
@@ -259,26 +166,6 @@ document.addEventListener('DOMContentLoaded', function() {
             fileInput.files = e.dataTransfer.files;
             handleFileSelect();
         }
-    }
-    
-    function handleVideoTimeUpdate(e) {
-        const { currentTime } = e.detail;
-        highlightCurrentWord(currentTime);
-        updateTimelineCursor(currentTime);
-    }
-    
-    function handleVideoMetadataLoaded(e) {
-        const { duration } = e.detail;
-        updateTimelineScale(duration);
-    }
-    
-    function handleZoomEventRecorded(e) {
-        const { zoomEvent } = e.detail;
-        zoomEvents.push(zoomEvent);
-        addZoomMarkerToTranscript(zoomEvent);
-        addZoomEventToTimeline(zoomEvent);
-        updateZoomEventsList();
-        zoomEventsList.classList.remove('d-none');
     }
     
     // Calculate adjusted timestamps based on what's been cut
@@ -398,28 +285,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 uploadSection.style.display = 'none';
                 editorSection.style.display = 'block';
                 
-                // Initialize video player using our enhanced integration
-                const src = `/video/${sessionId}/${originalFilename}`;
-                if (window.videoJsIntegration) {
-                    try {
-                        const playerInstance = window.videoJsIntegration.initPlayer(src);
-                        if (!playerInstance) {
-                            console.error("Failed to initialize video player. Retrying in 1 second...");
-                            // Try again after a short delay - sometimes the DOM isn't ready
-                            setTimeout(() => {
-                                window.videoJsIntegration.initPlayer(src);
-                            }, 1000);
-                        }
-                    } catch (err) {
-                        console.error("Error initializing video player:", err);
-                    }
-                }
-                
-                // Reset zoom state
-                if (window.videoJsIntegration) {
-                    window.videoJsIntegration.resetZoom();
-                    window.videoJsIntegration.setZoomMode('drag'); // Always set to drag mode
-                }
+                // Initialize the Video.js player
+                const videoSrc = `/video/${sessionId}/${originalFilename}`;
+                initPlayer(videoSrc);
                 
                 // Render transcript
                 renderTranscript();
@@ -456,9 +324,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 silenceEl.addEventListener('click', function() {
                     // Jump to this silence in the video
-                    if (window.videoJsIntegration) {
-                        window.videoJsIntegration.seekTo(parseFloat(word.start));
-                        window.videoJsIntegration.play();
+                    if (player) {
+                        player.currentTime(parseFloat(word.start));
+                        player.play();
                     }
                 });
                 
@@ -488,9 +356,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     handleWordSelection(this, index);
                 } else {
                     // Jump to this word in the video
-                    if (window.videoJsIntegration) {
-                        window.videoJsIntegration.seekTo(parseFloat(word.start));
-                        window.videoJsIntegration.play();
+                    if (player) {
+                        player.currentTime(parseFloat(word.start));
+                        player.play();
                     }
                 }
             });
@@ -606,9 +474,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 hasShownKeyboardShortcutTip = true;
             }
             
-            // Update timeline to show cut segments
-            updateTimelineCutSegments();
-            
             selections.forEach((selection, index) => {
                 const selectionItem = document.createElement('div');
                 selectionItem.className = 'selection-item';
@@ -616,21 +481,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const textSpan = document.createElement('span');
                 textSpan.textContent = `"${selection.text}" (${formatTime(selection.start)} - ${formatTime(selection.end)})`;
                 
-                const playBtn = document.createElement('button');
-                playBtn.className = 'btn btn-outline-primary btn-sm';
-                playBtn.innerHTML = '▶';
-                playBtn.title = 'Play this segment';
-                playBtn.style.marginRight = '5px';
-                playBtn.addEventListener('click', () => playSelection(selection));
-                
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'btn btn-outline-danger btn-sm';
                 removeBtn.innerHTML = '&times;';
-                removeBtn.title = 'Remove this selection';
                 removeBtn.addEventListener('click', () => removeSelection(index));
                 
                 selectionItem.appendChild(textSpan);
-                selectionItem.appendChild(playBtn);
                 selectionItem.appendChild(removeBtn);
                 selectionsContainer.appendChild(selectionItem);
             });
@@ -644,25 +500,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     keyboardShortcuts.style.display = 'block';
                 }
                 hasShownKeyboardShortcutTip = false;
-            }
-        }
-    }
-    
-    function playSelection(selection) {
-        if (window.videoJsIntegration) {
-            const player = window.videoJsIntegration.getPlayer();
-            if (player) {
-                // Set up one-time event handler for when playback reaches end time
-                const endTimeHandler = function() {
-                    if (player.currentTime() >= selection.end) {
-                        player.pause();
-                        player.off('timeupdate', endTimeHandler);
-                    }
-                };
-                
-                player.on('timeupdate', endTimeHandler);
-                window.videoJsIntegration.seekTo(selection.start);
-                window.videoJsIntegration.play();
             }
         }
     }
@@ -698,25 +535,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         updateSelectionsList();
         
-        // Clear timeline cut segments
-        clearTimelineCutSegments();
-        
         // Reset video if there was an edited version
         if (editedVideoUrl || previewVideoUrl) {
-            if (window.videoJsIntegration) {
-                try {
-                    const playerInstance = window.videoJsIntegration.initPlayer(`/video/${sessionId}/${originalFilename}`);
-                    if (!playerInstance) {
-                        console.error("Failed to reset player. Retrying in 1 second...");
-                        // Try again after a short delay
-                        setTimeout(() => {
-                            window.videoJsIntegration.initPlayer(`/video/${sessionId}/${originalFilename}`);
-                        }, 1000);
-                    }
-                } catch (err) {
-                    console.error("Error resetting player:", err);
-                }
-            }
+            const videoSrc = `/video/${sessionId}/${originalFilename}`;
+            initPlayer(videoSrc);
+            
             downloadBtn.disabled = false;
             downloadBtn.textContent = "✂️ Create & Download Edited Video";
             editedVideoUrl = null;
@@ -729,9 +552,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function processAndDownloadVideo() {
         if (isProcessing) return;
         
-        // Allow processing with only zoom events
         if (selections.length === 0 && zoomEvents.length === 0) {
-            alert('Please select at least one text segment to remove or add a zoom event.');
+            alert('Please select at least one segment to remove or add a zoom effect.');
             return;
         }
         
@@ -745,17 +567,23 @@ document.addEventListener('DOMContentLoaded', function() {
         downloadBtn.disabled = true;
         downloadBtn.textContent = "Processing...";
         
-        let loadingMessage = '🧙‍♂️ Casting remove text  (a 5th level spell) on your video...';
-        if (zoomEvents.length > 0) {
-            loadingMessage += '\n📹 Adding ' + zoomEvents.length + ' zoom effects!';
+        let loadingMessage = '🧙‍♂️ Casting magical spells on your video...';
+        if (selections.length > 0) {
+            loadingMessage += '\n✂️ Cutting ' + selections.length + ' segments';
         }
+        if (zoomEvents.length > 0) {
+            loadingMessage += '\n🔍 Adding ' + zoomEvents.length + ' zoom effects';
+        }
+        
         showLoading(loadingMessage);
         
         // Sort selections by start time
         const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
         
         // Calculate adjusted timestamps for transcript after editing
-        adjustedTranscriptData = calculateAdjustedTimestamps(transcriptData, sortedSelections);
+        if (selections.length > 0) {
+            adjustedTranscriptData = calculateAdjustedTimestamps(transcriptData, sortedSelections);
+        }
         
         // Simulate progress
         let progress = 0;
@@ -790,20 +618,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 previewVideoUrl = `/video/${sessionId}/${data.preview_file}`;
                 
                 // Update video player with preview
-                if (window.videoJsIntegration) {
-                    try {
-                        const playerInstance = window.videoJsIntegration.initPlayer(previewVideoUrl);
-                        if (!playerInstance) {
-                            console.error("Failed to initialize preview player. Retrying in 1 second...");
-                            // Try again after a short delay
-                            setTimeout(() => {
-                                window.videoJsIntegration.initPlayer(previewVideoUrl);
-                            }, 1000);
-                        }
-                    } catch (err) {
-                        console.error("Error initializing preview player:", err);
-                    }
-                }
+                initPlayer(previewVideoUrl);
+                
+                setTimeout(() => {
+                    if (player) player.play();
+                }, 500);
                 
                 isShowingEditedVideo = true;
                 
@@ -841,13 +660,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    function highlightCurrentWord(currentTime) {
+    function highlightCurrentWord() {
         // Remove current highlight from all words and silence markers
         const currentElements = document.querySelectorAll('.word.current, .silence-marker.current');
         currentElements.forEach(el => el.classList.remove('current'));
         
+        // Get current time in the video
+        const currentTime = player ? player.currentTime() : 0;
+        
         // Use adjusted timestamps if showing edited video
         const dataToUse = isShowingEditedVideo ? adjustedTranscriptData : transcriptData;
+        if (!dataToUse || dataToUse.length === 0) return;
         
         // Find the word or silence that corresponds to the current time
         for (let i = 0; i < dataToUse.length; i++) {
@@ -878,6 +701,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+    
+    function handleTimeUpdate() {
+        highlightCurrentWord();
+        updateTimelineCursor();
+    }
+    
+    // Video Controls Functions
     
     // Context menu handling
     function handleContextMenu(e) {
@@ -970,122 +800,349 @@ document.addEventListener('DOMContentLoaded', function() {
         hideContextMenu();
     }
     
-    function updateTimelineScale(duration) {
-        if (!timelineScale) return;
+    // Keyboard shortcut handling
+    function handleKeyboardShortcut(e) {
+        // If focused on an input, don't capture shortcuts
+        if (e.target.tagName.toLowerCase() === 'input' || 
+            e.target.tagName.toLowerCase() === 'textarea') {
+            return;
+        }
         
-        // Clear existing markers
-        timelineScale.innerHTML = '';
+        // 'x' key for marking text to cut
+        if (e.key === 'x' || e.key === 'X') {
+            // Get the current text selection
+            const selection = window.getSelection();
+            if (selection.toString().trim() !== '') {
+                markSelectionForCut();
+                e.preventDefault(); // Prevent default 'x' action
+            }
+        }
         
-        // Add time markers
-        duration = duration || 60; // fallback to 60s if duration not available
-        const interval = Math.max(1, Math.floor(duration / 10)); // Create at most 10 markers
+        // 'z' key for toggling zoom mode
+        if (e.key === 'z' || e.key === 'Z') {
+            // Cycle through zoom modes
+            if (zoomMode === 'none') {
+                zoomModeSelect.value = 'drag';
+            } else if (zoomMode === 'drag') {
+                zoomModeSelect.value = 'simple';
+            } else {
+                zoomModeSelect.value = 'none';
+            }
+            handleZoomModeChange();
+            e.preventDefault();
+        }
         
-        for (let i = 0; i <= duration; i += interval) {
-            const marker = document.createElement('span');
-            marker.className = 'timeline-marker';
-            marker.textContent = formatTime(i);
-            marker.style.left = `${(i / duration) * 100}%`;
-            timelineScale.appendChild(marker);
+        // 'r' key for toggling zoom recording
+        if (e.key === 'r' || e.key === 'R') {
+            toggleZoomRecording();
+            e.preventDefault();
+        }
+        
+        // Space for play/pause (if not in Video.js controls)
+        if (e.key === ' ' && !e.target.closest('.video-js')) {
+            if (player) {
+                if (player.paused()) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
+                e.preventDefault();
+            }
+        }
+    }
+    
+    // Zoom and Mouse Tracking Functions
+    function changeZoom(increment) {
+        // Update the zoom level
+        zoomLevel += increment;
+        
+        // Limit zoom level between 1 and 3
+        zoomLevel = Math.min(Math.max(zoomLevel, 1), 3);
+        
+        applyZoom();
+    }
+    
+    function resetZoom() {
+        zoomLevel = 1;
+        
+        // Get the actual video element inside Video.js
+        const videoElement = getVideoElement();
+        if (videoElement) {
+            videoElement.style.transform = 'scale(1)';
+            videoElement.style.transformOrigin = '50% 50%';
+        }
+    }
+    
+    function getVideoElement() {
+        // If using Video.js, get the actual video element
+        if (player) {
+            return player.el().querySelector('video');
+        }
+        return null;
+    }
+    
+    function applyZoom() {
+        // Get the actual video element
+        const videoElement = getVideoElement();
+        if (!videoElement) return;
+        
+        // Apply the zoom level to the video
+        videoElement.style.transform = `scale(${zoomLevel})`;
+        
+        // If we're in a zoom mode, adjust the video position to center on the zoom point
+        if (zoomLevel > 1 && zoomMode !== 'none') {
+            // Set the transform origin based on the focus point
+            videoElement.style.transformOrigin = `${zoomPoint.x * 100}% ${zoomPoint.y * 100}%`;
+        } else {
+            // Reset position if we're at zoom level 1 or no zoom mode
+            videoElement.style.transformOrigin = '50% 50%';
+        }
+        
+        // If recording, update the current zoom event zoom level
+        if (isRecordingZoom && currentZoomEvent) {
+            currentZoomEvent.endZoomLevel = zoomLevel;
+        }
+    }
+    
+    function handleZoomModeChange() {
+        // Get the selected mode
+        zoomMode = zoomModeSelect.value;
+        
+        // Reset zoom if switching to 'none' mode
+        if (zoomMode === 'none') {
+            resetZoom();
+            if (mouseIndicator) mouseIndicator.style.display = 'none';
+            videoWrapper.style.cursor = 'default';
+        }
+        
+        // Apply zoom if already zoomed in
+        if (zoomLevel > 1) {
+            applyZoom();
+        }
+        
+        // Update cursor style based on mode
+        if (zoomMode === 'simple') {
+            videoWrapper.classList.add('zoom-active');
+            videoWrapper.style.cursor = 'zoom-in';
+        } else if (zoomMode === 'drag') {
+            videoWrapper.classList.remove('zoom-active');
+            videoWrapper.style.cursor = 'grab';
+        } else {
+            videoWrapper.classList.remove('zoom-active');
+            videoWrapper.style.cursor = 'default';
+        }
+        
+        // Hide the mouse indicator
+        if (mouseIndicator) {
+            mouseIndicator.style.display = 'none';
+        }
+    }
+    
+    function handleMouseDown(e) {
+        if (zoomMode !== 'drag' || zoomLevel <= 1) return;
+        
+        isDragging = true;
+        dragStart = { x: e.clientX, y: e.clientY };
+        
+        // Change cursor to indicate dragging
+        videoWrapper.style.cursor = 'grabbing';
+        e.preventDefault();
+    }
+    
+    function handleMouseUp() {
+        if (isDragging) {
+            isDragging = false;
+            videoWrapper.style.cursor = 'grab';
+            
+            // If recording, update the current zoom event focus point
+            if (isRecordingZoom && currentZoomEvent) {
+                currentZoomEvent.focusPoint = { ...zoomPoint };
+            }
+        }
+    }
+    
+    function handleMouseMove(e) {
+        // For drag mode, handle dragging the zoomed video
+        if (isDragging && zoomMode === 'drag') {
+            const dx = e.clientX - dragStart.x;
+            const dy = e.clientY - dragStart.y;
+            
+            // Calculate the movement in normalized coordinates (0-1)
+            const rect = videoWrapper.getBoundingClientRect();
+            const moveX = dx / rect.width;
+            const moveY = dy / rect.height;
+            
+            // Update zoom point (with limits to prevent moving out of bounds)
+            const scale = 1 / (zoomLevel * 2);
+            zoomPoint.x = Math.max(0, Math.min(1, zoomPoint.x - moveX * scale));
+            zoomPoint.y = Math.max(0, Math.min(1, zoomPoint.y - moveY * scale));
+            
+            // Update the video position
+            applyZoom();
+            
+            // Reset drag start point
+            dragStart = { x: e.clientX, y: e.clientY };
+        }
+    }
+    
+    function handleVideoClick(e) {
+        if (zoomMode !== 'simple') return;
+        
+        // Get the position within the video wrapper
+        const rect = videoWrapper.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        
+        // Set the zoom point
+        zoomPoint = { x, y };
+        
+        // Toggle between zoomed and normal
+        if (zoomLevel > 1) {
+            resetZoom();
+        } else {
+            zoomLevel = 2; // Set to medium zoom level
+            applyZoom();
+        }
+    }
+    
+    // Zoom Recording Functions
+    function toggleZoomRecording() {
+        isRecordingZoom = !isRecordingZoom;
+        
+        if (isRecordingZoom) {
+            // Start recording
+            recordZoomBtn.classList.remove('btn-outline-primary');
+            recordZoomBtn.classList.add('btn-danger');
+            recordZoomBtn.textContent = '⏹ Stop Recording';
+            zoomRecordStatus.textContent = 'Recording Zoom';
+            zoomRecordStatus.classList.add('recording');
+            
+            // Initialize a new zoom event
+            recordingStartTime = player ? player.currentTime() : 0;
+            currentZoomEvent = {
+                id: 'zoom-' + Date.now(),
+                startTime: recordingStartTime,
+                endTime: recordingStartTime, // Will be updated when recording stops
+                startZoomLevel: zoomLevel,
+                endZoomLevel: zoomLevel,
+                focusPoint: { ...zoomPoint }
+            };
+            
+            // Set to correct zoom mode for recording
+            if (zoomMode === 'none') {
+                zoomModeSelect.value = 'drag';
+                handleZoomModeChange();
+            }
+            
+        } else {
+            // Stop recording and add the zoom event
+            recordZoomBtn.classList.remove('btn-danger');
+            recordZoomBtn.classList.add('btn-outline-primary');
+            recordZoomBtn.textContent = '📹 Record Zoom';
+            zoomRecordStatus.textContent = '';
+            zoomRecordStatus.classList.remove('recording');
+            
+            if (currentZoomEvent) {
+                // Finalize the zoom event
+                currentZoomEvent.endTime = player ? player.currentTime() : currentZoomEvent.startTime + 1;
+                
+                // Only add if duration is meaningful
+                if (currentZoomEvent.endTime > currentZoomEvent.startTime) {
+                    zoomEvents.push(currentZoomEvent);
+                    addZoomMarkerToTranscript(currentZoomEvent);
+                    addZoomEventToTimeline(currentZoomEvent);
+                    updateZoomEventsList();
+                    zoomEventsList.classList.remove('d-none');
+                }
+                
+                currentZoomEvent = null;
+            }
         }
     }
     
     function addZoomMarkerToTranscript(zoomEvent) {
         // Find the correct position in the transcript based on the start time
         const startTime = zoomEvent.startTime;
-        const endTime = zoomEvent.endTime;
         
-        // Find the words in transcript that are within this time range
-        let startIndex = -1;
-        let endIndex = -1;
-        
+        // Find the word in transcript that corresponds to this time
+        let insertAfterIndex = -1;
         for (let i = 0; i < transcriptData.length; i++) {
-            const wordStart = parseFloat(transcriptData[i].start);
-            const wordEnd = parseFloat(transcriptData[i].end);
-            
-            // Find the first word that starts within or just before the zoom range
-            if (startIndex === -1 && wordStart <= startTime && wordEnd >= startTime) {
-                startIndex = i;
+            if (parseFloat(transcriptData[i].start) <= startTime && 
+                parseFloat(transcriptData[i].end) >= startTime) {
+                insertAfterIndex = i;
+                break;
             }
             
-            // Find the last word that ends within or just after the zoom range
-            if (wordEnd <= endTime) {
-                endIndex = i;
-            }
-        }
-        
-        // If we didn't find exact matches, make a best effort
-        if (startIndex === -1 && transcriptData.length > 0) {
-            // Find the closest word before the start time
-            for (let i = 0; i < transcriptData.length; i++) {
-                if (parseFloat(transcriptData[i].start) > startTime) {
-                    startIndex = Math.max(0, i - 1);
-                    break;
+            if (parseFloat(transcriptData[i].start) > startTime) {
+                if (i > 0) {
+                    insertAfterIndex = i - 1;
+                } else {
+                    insertAfterIndex = 0;
                 }
-            }
-            if (startIndex === -1) startIndex = 0;
-        }
-        
-        if (endIndex === -1 && transcriptData.length > 0) {
-            // Find the closest word after the end time
-            for (let i = transcriptData.length - 1; i >= 0; i--) {
-                if (parseFloat(transcriptData[i].end) < endTime) {
-                    endIndex = Math.min(transcriptData.length - 1, i + 1);
-                    break;
-                }
-            }
-            if (endIndex === -1) endIndex = transcriptData.length - 1;
-        }
-        
-        // Apply zoom class to all words in the range
-        for (let i = startIndex; i <= endIndex; i++) {
-            const el = document.querySelector(`[data-index="${i}"]`);
-            if (el) {
-                el.classList.add('zoom-highlight');
-                el.dataset.zoomId = zoomEvent.id;
-                
-                // Add the zoom level as a data attribute to be displayed on hover
-                el.dataset.zoomLevel = zoomEvent.endZoomLevel.toFixed(1);
+                break;
             }
         }
         
-        // Add a small zoom indicator at the start of the range
-        const firstEl = document.querySelector(`[data-index="${startIndex}"]`);
-        if (firstEl) {
-            // Add a subtle zoom icon before the first word
-            const zoomIconEl = document.createElement('span');
-            zoomIconEl.className = 'zoom-icon';
-            zoomIconEl.innerHTML = `🔍${zoomEvent.endZoomLevel.toFixed(1)}x`;
-            zoomIconEl.dataset.zoomId = zoomEvent.id;
-            
-            // Clicking the zoom icon jumps to that point in the video
-            zoomIconEl.addEventListener('click', () => {
-                if (window.videoJsIntegration) {
-                    window.videoJsIntegration.seekTo(zoomEvent.startTime);
-                    window.videoJsIntegration.play();
-                }
-            });
-            
-            // Add a remove button
-            const removeButton = document.createElement('span');
-            removeButton.className = 'zoom-remove';
-            removeButton.innerHTML = '×';
-            removeButton.title = 'Remove zoom';
-            removeButton.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent jumping to video point
-                removeZoomEvent(zoomEvent.id);
-            });
-            
-            zoomIconEl.appendChild(removeButton);
-            
-            // Insert before the first word
-            firstEl.parentNode.insertBefore(zoomIconEl, firstEl);
+        if (insertAfterIndex === -1 && transcriptData.length > 0) {
+            insertAfterIndex = transcriptData.length - 1;
+        }
+        
+        // Create the zoom marker element
+        const zoomMarker = document.createElement('div');
+        zoomMarker.className = 'zoom-marker';
+        zoomMarker.dataset.zoomId = zoomEvent.id;
+        zoomMarker.dataset.startTime = zoomEvent.startTime;
+        zoomMarker.dataset.endTime = zoomEvent.endTime;
+        
+        const zoomLabel = document.createElement('span');
+        zoomLabel.className = 'zoom-label';
+        zoomLabel.innerHTML = `🔍 ZOOM (${zoomEvent.startZoomLevel.toFixed(1)}x → ${zoomEvent.endZoomLevel.toFixed(1)}x)`;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-zoom-btn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.addEventListener('click', () => removeZoomEvent(zoomEvent.id));
+        
+        zoomMarker.appendChild(zoomLabel);
+        zoomMarker.appendChild(removeBtn);
+        
+        // Insert the zoom marker at the appropriate position
+        if (insertAfterIndex >= 0) {
+            const wordEl = document.querySelector(`[data-index="${insertAfterIndex}"]`);
+            if (wordEl && wordEl.nextSibling) {
+                wordEl.parentNode.insertBefore(zoomMarker, wordEl.nextSibling);
+            } else if (wordEl) {
+                wordEl.parentNode.appendChild(zoomMarker);
+            } else {
+                transcriptContent.appendChild(zoomMarker);
+            }
+        } else {
+            transcriptContent.insertBefore(zoomMarker, transcriptContent.firstChild);
+        }
+    }
+    
+    function updateTimelineScale() {
+        if (!timelineScale || !player) return;
+        
+        // Clear existing markers
+        timelineScale.innerHTML = '';
+        
+        // Add time markers
+        const duration = player.duration() || 60; // fallback to 60s if duration not available
+        const interval = Math.max(1, Math.floor(duration / 10)); // Create at most 10 markers
+        
+        for (let i = 0; i <= duration; i += interval) {
+            const marker = document.createElement('span');
+            marker.className = 'timeline-marker';
+            marker.textContent = formatTime(i);
+            timelineScale.appendChild(marker);
         }
     }
     
     function addZoomEventToTimeline(zoomEvent) {
-        if (!zoomEventsContainer) return;
+        if (!zoomEventsContainer || !player) return;
         
-        const duration = window.videoJsIntegration ? window.videoJsIntegration.getDuration() : 60;
+        const duration = player.duration() || 60;
         const startPercent = (zoomEvent.startTime / duration) * 100;
         const endPercent = (zoomEvent.endTime / duration) * 100;
         const width = endPercent - startPercent;
@@ -1106,32 +1163,15 @@ document.addEventListener('DOMContentLoaded', function() {
         zoomEventsContainer.appendChild(eventEl);
     }
     
-    function updateTimelineCursor(currentTime) {
-        if (!timelineCursor) return;
-        
-        const duration = window.videoJsIntegration ? window.videoJsIntegration.getDuration() : 0;
+    function updateTimelineCursor() {
+        if (!timelineCursor || !player || !player.duration()) return;
         
         // Show cursor when video is loaded
-        if (duration) {
-            timelineCursor.style.display = 'block';
-            
-            // Calculate position based on current time
-            const percent = (currentTime / duration) * 100;
-            timelineCursor.style.left = `${percent}%`;
-        }
-    }
-    
-    function handleTimelineClick(e) {
-        if (!window.videoJsIntegration) return;
+        timelineCursor.style.display = 'block';
         
-        const rect = zoomTimeline.getBoundingClientRect();
-        const clickPosition = (e.clientX - rect.left) / rect.width;
-        
-        // Set video time based on click position
-        const duration = window.videoJsIntegration.getDuration();
-        if (duration) {
-            window.videoJsIntegration.seekTo(clickPosition * duration);
-        }
+        // Calculate position based on current time
+        const percent = (player.currentTime() / player.duration()) * 100;
+        timelineCursor.style.left = `${percent}%`;
     }
     
     function updateZoomEventsList() {
@@ -1166,9 +1206,9 @@ document.addEventListener('DOMContentLoaded', function() {
             jumpBtn.innerHTML = '▶';
             jumpBtn.style.marginRight = '5px';
             jumpBtn.addEventListener('click', () => {
-                if (window.videoJsIntegration) {
-                    window.videoJsIntegration.seekTo(event.startTime);
-                    window.videoJsIntegration.play();
+                if (player) {
+                    player.currentTime(event.startTime);
+                    player.play();
                 }
             });
             
@@ -1186,17 +1226,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Remove from the array
         zoomEvents = zoomEvents.filter(event => event.id !== id);
         
-        // Remove highlighting from transcript words
-        const highlightedWords = document.querySelectorAll(`.word[data-zoom-id="${id}"], .silence-marker[data-zoom-id="${id}"]`);
-        highlightedWords.forEach(el => {
-            el.classList.remove('zoom-highlight');
-            delete el.dataset.zoomId;
-            delete el.dataset.zoomLevel;
-        });
-        
-        // Remove the zoom icon
-        const zoomIcon = document.querySelector(`.zoom-icon[data-zoom-id="${id}"]`);
-        if (zoomIcon) zoomIcon.remove();
+        // Remove from transcript
+        const markerEl = document.querySelector(`.zoom-marker[data-zoom-id="${id}"]`);
+        if (markerEl) markerEl.remove();
         
         // Remove from timeline
         const timelineEl = document.querySelector(`.zoom-event[data-zoom-id="${id}"]`);
@@ -1222,8 +1254,24 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Jump to the event time
         const event = zoomEvents.find(e => e.id === id);
-        if (event && window.videoJsIntegration) {
-            window.videoJsIntegration.seekTo(event.startTime);
+        if (event && player) {
+            player.currentTime(event.startTime);
+        }
+    }
+    
+    function handleVideoPlay() {
+        updateTimelineScale();
+    }
+    
+    function handleVideoPause() {
+        if (isRecordingZoom) {
+            toggleZoomRecording(); // Stop recording when video is paused
+        }
+    }
+    
+    function handleVideoSeeking() {
+        if (isRecordingZoom) {
+            toggleZoomRecording(); // Stop recording when seeking
         }
     }
     
@@ -1278,56 +1326,5 @@ document.addEventListener('DOMContentLoaded', function() {
             cleanupBtn.disabled = false;
             cleanupBtn.textContent = "🗑️ Clear Server Data";
         });
-    }
-    
-    function updateTimelineCutSegments() {
-        // First, clear existing cut segments
-        clearTimelineCutSegments();
-        
-        if (!zoomTimeline || selections.length === 0) return;
-        
-        const duration = window.videoJsIntegration ? window.videoJsIntegration.getDuration() : 60;
-        if (!duration) return;
-        
-        // Create a container for cut segments if it doesn't exist
-        let cutSegmentsContainer = document.querySelector('.timeline-cut-segments');
-        if (!cutSegmentsContainer) {
-            cutSegmentsContainer = document.createElement('div');
-            cutSegmentsContainer.className = 'timeline-cut-segments';
-            zoomTimeline.appendChild(cutSegmentsContainer);
-        }
-        
-        // Sort selections by start time
-        const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
-        
-        // Add each cut segment to the timeline
-        sortedSelections.forEach((selection, index) => {
-            const startPercent = (selection.start / duration) * 100;
-            const endPercent = (selection.end / duration) * 100;
-            const width = endPercent - startPercent;
-            
-            const cutSegment = document.createElement('div');
-            cutSegment.className = 'timeline-cut-segment';
-            cutSegment.style.left = `${startPercent}%`;
-            cutSegment.style.width = `${width}%`;
-            cutSegment.title = `Cut: ${formatTime(selection.start)} - ${formatTime(selection.end)}`;
-            
-            // Add click handler to jump to this cut
-            cutSegment.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent timeline click from triggering
-                if (window.videoJsIntegration) {
-                    window.videoJsIntegration.seekTo(selection.start);
-                }
-            });
-            
-            cutSegmentsContainer.appendChild(cutSegment);
-        });
-    }
-    
-    function clearTimelineCutSegments() {
-        const cutSegmentsContainer = document.querySelector('.timeline-cut-segments');
-        if (cutSegmentsContainer) {
-            cutSegmentsContainer.innerHTML = '';
-        }
     }
 });

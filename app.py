@@ -23,7 +23,7 @@ os.makedirs(app.config['PROCESSED_FOLDER'], exist_ok=True)
 
 # Load Whisper model (can choose size based on accuracy needs vs. performance)
 # Options: "tiny", "base", "small", "medium", "large"
-model = whisper.load_model("medium")  # Good balance of accuracy and speed
+model = whisper.load_model("tiny")  # Good balance of accuracy and speed
 
 # Check for available hardware acceleration options
 def check_gpu_availability():
@@ -220,9 +220,13 @@ def edit_video():
     session_id = data.get('session_id')
     filename = data.get('filename')
     selections = data.get('selections', [])  # Text selections to remove
+    zoom_events = data.get('zoom_events', [])  # Zoom events to apply
     preview_only = data.get('preview_only', False)  # Whether to only generate a preview
     
-    if not session_id or not filename or not selections:
+    if not session_id or not filename: # Allow videos with no selections but with zoom events
+        return jsonify({'error': 'Missing required data'}), 400
+        
+    if not selections and not zoom_events:
         return jsonify({'error': 'Missing required data'}), 400
     
     session_folder = os.path.join(app.config['PROCESSED_FOLDER'], session_id)
@@ -262,19 +266,160 @@ def edit_video():
             'start': current_start,
             'end': video_duration
         })
+        
+    # Process zoom events
+    sorted_zoom_events = sorted(zoom_events, key=lambda x: x['startTime'])
+    
+    # Save zoom events to file for debugging and reference
+    zoom_events_path = os.path.join(session_folder, "zoom_events.json")
+    with open(zoom_events_path, 'w') as f:
+        json.dump(sorted_zoom_events, f, indent=2)
     
     # Create temporary file for filter complex script
     filter_file = os.path.join(session_folder, "filter_complex.txt")
     with open(filter_file, 'w') as f:
+        # First create segment streams
         for i, segment in enumerate(segments_to_keep):
             f.write(f"[0:v]trim={segment['start']}:{segment['end']},setpts=PTS-STARTPTS[v{i}];\n")
             f.write(f"[0:a]atrim={segment['start']}:{segment['end']},asetpts=PTS-STARTPTS[a{i}];\n")
         
-        # Concatenate video and audio streams
+        # Get streams arrays for audio concatenation
         v_stream = ''.join(f'[v{i}]' for i in range(len(segments_to_keep)))
         a_stream = ''.join(f'[a{i}]' for i in range(len(segments_to_keep)))
         
-        f.write(f"{v_stream}concat=n={len(segments_to_keep)}:v=1:a=0[outv];\n")
+        # First concat video segments
+        f.write(f"{v_stream}concat=n={len(segments_to_keep)}:v=1:a=0[vconcated];\n")
+        
+        # If we have zoom events, process them one by one
+        if zoom_events and sorted_zoom_events:
+            # Calculate how many splits we need (one for each zoom, plus gaps between zooms)
+            # Maximum number of segments is 2n+1 where n is number of zooms
+            max_segments = len(sorted_zoom_events) * 2 + 1
+            
+            # Generate split outputs
+            split_outputs = [f"[split_{i}]" for i in range(max_segments)]
+            f.write(f"[vconcated]split={max_segments}{(''.join(split_outputs))};\n")
+            
+            # For tracking which parts of the video have been processed
+            processed_segments = []
+            
+            # For naming the video stream segments
+            segment_counter = 0
+            split_counter = 0
+            
+            current_time = 0
+            
+            # Calculate timing adjustments for zooms after cuts
+            segment_timeline = []
+            running_time = 0
+            
+            for segment in segments_to_keep:
+                segment_duration = segment['end'] - segment['start']
+                segment_timeline.append({
+                    'original_start': segment['start'],
+                    'original_end': segment['end'],
+                    'timeline_start': running_time,
+                    'timeline_end': running_time + segment_duration
+                })
+                running_time += segment_duration
+            
+            total_duration = running_time
+            
+            # Process each zoom event in order
+            for zoom_idx, zoom in enumerate(sorted_zoom_events):
+                # Get original start and end times from the zoom event
+                orig_start_time = max(0, float(zoom.get('startTime', 0)))
+                orig_end_time = min(video_duration, float(zoom.get('endTime', video_duration)))
+                
+                # Find where these times fall in the new timeline after cuts
+                adj_start_time = None
+                adj_end_time = None
+                
+                # Convert original times to timeline times
+                for seg in segment_timeline:
+                    # Check if zoom start is in this segment
+                    if orig_start_time >= seg['original_start'] and orig_start_time <= seg['original_end']:
+                        # Convert to the new timeline position
+                        rel_pos = (orig_start_time - seg['original_start']) / (seg['original_end'] - seg['original_start'])
+                        adj_start_time = seg['timeline_start'] + rel_pos * (seg['timeline_end'] - seg['timeline_start'])
+                    
+                    # Check if zoom end is in this segment
+                    if orig_end_time >= seg['original_start'] and orig_end_time <= seg['original_end']:
+                        # Convert to the new timeline position
+                        rel_pos = (orig_end_time - seg['original_start']) / (seg['original_end'] - seg['original_start'])
+                        adj_end_time = seg['timeline_start'] + rel_pos * (seg['timeline_end'] - seg['timeline_start'])
+                
+                # Skip this zoom if it can't be mapped to the new timeline
+                if adj_start_time is None or adj_end_time is None or adj_start_time >= adj_end_time:
+                    continue
+                
+                # Make sure zooms don't overlap
+                adj_start_time = max(adj_start_time, current_time)
+                if adj_start_time >= adj_end_time:
+                    continue
+                
+                # Get zoom level exactly as recorded
+                zoom_level = 2.0  # Default fallback
+                if 'endZoomLevel' in zoom and zoom['endZoomLevel'] is not None:
+                    # Use exactly the zoom level recorded by the user
+                    zoom_level = float(zoom['endZoomLevel'])
+                
+                # Get focus point
+                x, y = 0.5, 0.5  # Default center position
+                focus_point = zoom.get('focusPoint', {})
+                if isinstance(focus_point, dict):
+                    if 'x' in focus_point and focus_point['x'] is not None:
+                        x = min(1.0, max(0.0, float(focus_point['x'])))
+                    if 'y' in focus_point and focus_point['y'] is not None:
+                        y = min(1.0, max(0.0, float(focus_point['y'])))
+                
+                # Calculate scale and crop parameters
+                scale_factor = 1.0 / zoom_level
+                crop_width = f"iw*{scale_factor}"
+                crop_height = f"ih*{scale_factor}"
+                crop_x = f"(iw-{crop_width})*{x}"
+                crop_y = f"(ih-{crop_height})*{y}"
+                
+                # If there's a gap before this zoom, add it as a non-zoomed segment
+                if adj_start_time > current_time:
+                    f.write(f"[split_{split_counter}]trim={current_time}:{adj_start_time},setpts=PTS-STARTPTS[v_before_{segment_counter}];\n")
+                    processed_segments.append(f"[v_before_{segment_counter}]")
+                    segment_counter += 1
+                    split_counter += 1
+                
+                # Add the zoomed segment
+                zoom_stream = f"v_zoom_{segment_counter}"
+                f.write(f"[split_{split_counter}]trim={adj_start_time}:{adj_end_time},setpts=PTS-STARTPTS,")
+                f.write(f"crop={crop_width}:{crop_height}:{crop_x}:{crop_y},")
+                f.write(f"scale=iw*{zoom_level}:-1,scale=1920:1080,setsar=1:1[{zoom_stream}];\n")
+                processed_segments.append(f"[{zoom_stream}]")
+                segment_counter += 1
+                split_counter += 1
+                
+                # Update current position
+                current_time = adj_end_time
+            
+            # Add remaining video after last zoom
+            if current_time < total_duration:
+                f.write(f"[split_{split_counter}]trim={current_time}:{total_duration},setpts=PTS-STARTPTS[v_after_{segment_counter}];\n")
+                processed_segments.append(f"[v_after_{segment_counter}]")
+            
+            # Concatenate all segments if we have multiple
+            if processed_segments:
+                if len(processed_segments) > 1:
+                    segments_str = ''.join(processed_segments)
+                    f.write(f"{segments_str}concat=n={len(processed_segments)}:v=1:a=0[outv];\n")
+                else:
+                    # Just one segment, use it directly
+                    f.write(f"{processed_segments[0]}copy[outv];\n")
+            else:
+                # No segments created, just use the vconcated video
+                f.write(f"[vconcated]copy[outv];\n")
+        else:
+            # No zoom, just use concatenated segments
+            f.write(f"{v_stream}concat=n={len(segments_to_keep)}:v=1:a=0[outv];\n")
+        
+        # Add audio stream concatenation
         f.write(f"{a_stream}concat=n={len(segments_to_keep)}:v=0:a=1[outa]")
     
     # Generate filenames
@@ -314,7 +459,8 @@ def edit_video():
         return jsonify({
             'success': True,
             'session_id': session_id,
-            'preview_file': preview_filename
+            'preview_file': preview_filename,
+            'zoom_events_applied': len(zoom_events) > 0
         })
     else:
         # Generate the full quality edited file

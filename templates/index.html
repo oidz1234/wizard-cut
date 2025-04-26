@@ -5,8 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Text-Based Video Editor</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <!-- VideoJS CSS -->
+    <link href="https://vjs.zencdn.net/8.3.0/video-js.css" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/custom-controls.css">
     <link rel="shortcut icon" href="/static/images/wizard.png" type="image/png">
     <link rel="icon" href="/static/images/wizard.png" type="image/png">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body>
     <header>
@@ -35,7 +40,37 @@
                 <div class="editor-container">
                     <div class="left-panel">
                         <div class="video-container">
-                            <video id="video-player" class="video-player" controls></video>
+                            <div id="video-wrapper" class="video-wrapper">
+                                <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" width="100%" height="100%">
+                                    <p class="vjs-no-js">
+                                        To view this video please enable JavaScript, and consider upgrading to a
+                                        web browser that supports HTML5 video
+                                    </p>
+                                </video>
+                                <div id="mouse-indicator" class="mouse-indicator"></div>
+                            </div>
+                        </div>
+                        
+                            <div class="zoom-controls">
+                                <div class="zoom-buttons">
+                                    <button id="zoom-in-btn" class="btn btn-outline-info btn-sm">🔍+</button>
+                                    <button id="zoom-reset-btn" class="btn btn-outline-secondary btn-sm">🔍Reset</button>
+                                    <button id="zoom-out-btn" class="btn btn-outline-info btn-sm">🔍-</button>
+                                </div>
+                                <div class="zoom-record-controls">
+                                    <button id="record-zoom-btn" class="btn btn-outline-primary btn-sm"><i class="fas fa-video"></i> Record Zoom</button>
+                                    <span id="zoom-record-status" class="status-badge"></span>
+                                </div>
+                                <div class="custom-player-controls">
+                                    <button id="custom-play-btn" class="btn btn-primary btn-sm"><i class="fas fa-play"></i></button>
+                                    <button id="custom-pause-btn" class="btn btn-secondary btn-sm"><i class="fas fa-pause"></i></button>
+                                </div>
+                            </div>
+                        
+                        <div id="zoom-timeline" class="zoom-timeline">
+                            <div class="timeline-scale"></div>
+                            <div id="zoom-events-container" class="zoom-events-container"></div>
+                            <div id="timeline-cursor" class="timeline-cursor"></div>
                         </div>
                         
                         <div class="controls">
@@ -47,11 +82,18 @@
                         
                         <div class="keyboard-shortcuts">
                             <p><span class="shortcut-key">X</span> - Press to mark selected text for deletion</p>
+                            <p><span class="shortcut-key">Z</span> - Cycle zoom modes (drag/click/none)</p>
+                            <p><span class="shortcut-key">R</span> - Start/stop recording zoom events</p>
                         </div>
                         
                         <div id="selections-list" class="d-none">
                             <h5>Selected Segments</h5>
                             <div id="selections-container"></div>
+                        </div>
+                        
+                        <div id="zoom-events-list" class="d-none">
+                            <h5>Zoom Events</h5>
+                            <div id="zoom-events-editor"></div>
                         </div>
                     </div>
                     
@@ -85,7 +127,9 @@
         <div class="context-menu-item" id="context-menu-cut">Mark for Cutting</div>
     </div>
 
-    <!-- External JavaScript file -->
+    <!-- External JavaScript files -->
+    <script src="https://vjs.zencdn.net/8.3.0/video.min.js"></script>
+    <script src="/static/video-js-integration.js"></script>
     <script src="/static/scripts.js"></script>
 </body>
 </html>
