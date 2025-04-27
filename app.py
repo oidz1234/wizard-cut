@@ -21,6 +21,9 @@ app.config['PROCESSED_FOLDER'] = 'processed'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['PROCESSED_FOLDER'], exist_ok=True)
 
+# Create dictionary for preview cache
+app.config['PREVIEW_CACHE'] = {}
+
 # Load Whisper model (can choose size based on accuracy needs vs. performance)
 # Options: "tiny", "base", "small", "medium", "large"
 model = whisper.load_model("tiny")  # Good balance of accuracy and speed
@@ -68,7 +71,14 @@ def get_encoder_settings(quality='high'):
                 'preset': 'p4',  # Higher quality preset
                 'extra': ['-b:v', '5M']
             }
-        else:  # preview/low quality
+        elif quality == 'preview':
+            # Ultra-fast preview settings
+            return {
+                'c:v': 'h264_nvenc',
+                'preset': 'p7',  # Fastest preset
+                'extra': ['-b:v', '500k', '-maxrate', '500k', '-bufsize', '500k']
+            }
+        else:  # low quality
             return {
                 'c:v': 'h264_nvenc',
                 'preset': 'p7',  # Faster/lower quality preset
@@ -82,7 +92,14 @@ def get_encoder_settings(quality='high'):
                 'quality': 'quality',
                 'extra': ['-b:v', '5M']
             }
-        else:  # preview/low quality
+        elif quality == 'preview':
+            # Ultra-fast preview settings
+            return {
+                'c:v': 'h264_amf',
+                'quality': 'speed',
+                'extra': ['-b:v', '500k', '-maxrate', '500k', '-bufsize', '500k']
+            }
+        else:  # low quality
             return {
                 'c:v': 'h264_amf',
                 'quality': 'speed',
@@ -96,7 +113,14 @@ def get_encoder_settings(quality='high'):
                 'preset': 'medium',
                 'extra': ['-b:v', '5M']
             }
-        else:  # preview/low quality
+        elif quality == 'preview':
+            # Ultra-fast preview settings
+            return {
+                'c:v': 'h264_qsv',
+                'preset': 'veryfast', 
+                'extra': ['-b:v', '500k', '-maxrate', '500k', '-bufsize', '500k']
+            }
+        else:  # low quality
             return {
                 'c:v': 'h264_qsv',
                 'preset': 'faster',
@@ -110,7 +134,15 @@ def get_encoder_settings(quality='high'):
                 'preset': 'medium',
                 'extra': []
             }
-        else:  # preview/low quality
+        elif quality == 'preview':
+            # Ultra-fast preview settings
+            return {
+                'c:v': 'libx264',
+                'preset': 'ultrafast',
+                'crf': '32',  # Very low quality for speed
+                'extra': ['-tune', 'zerolatency'] 
+            }
+        else:  # low quality
             return {
                 'c:v': 'libx264',
                 'preset': 'veryfast',
@@ -413,11 +445,13 @@ def edit_video():
                     # Just one segment, use it directly
                     f.write(f"{processed_segments[0]}copy[outv];\n")
             else:
-                # No segments created, just use the vconcated video
+                # No segments created, just use the vconcated video directly
                 f.write(f"[vconcated]copy[outv];\n")
         else:
             # No zoom, just use concatenated segments
-            f.write(f"{v_stream}concat=n={len(segments_to_keep)}:v=1:a=0[outv];\n")
+            # For consistency, use the same intermediate label as the zoom path
+            f.write(f"{v_stream}concat=n={len(segments_to_keep)}:v=1:a=0[vconcated];\n")
+            f.write(f"[vconcated]copy[outv];\n")
         
         # Add audio stream concatenation
         f.write(f"{a_stream}concat=n={len(segments_to_keep)}:v=0:a=1[outa]")
@@ -427,16 +461,55 @@ def edit_video():
     preview_file = os.path.join(session_folder, preview_filename)
     
     if preview_only:
-        # Get encoder settings for preview quality
-        encoder = get_encoder_settings(quality='low')
+        # Create a unique identifier for this edit configuration
+        selection_hash = hash(str(sorted_selections) + str(sorted_zoom_events))
         
-        # Build the FFmpeg command
+        # Check if we have a cached preview for this edit
+        if session_id in app.config['PREVIEW_CACHE'] and \
+           selection_hash in app.config['PREVIEW_CACHE'][session_id] and \
+           os.path.exists(os.path.join(session_folder, app.config['PREVIEW_CACHE'][session_id][selection_hash])):
+            # Return cached preview file
+            return jsonify({
+                'success': True,
+                'session_id': session_id,
+                'preview_file': app.config['PREVIEW_CACHE'][session_id][selection_hash],
+                'zoom_events_applied': len(zoom_events) > 0,
+                'cached': True
+            })
+        
+        # Get encoder settings for preview quality (faster than low quality)
+        encoder = get_encoder_settings(quality='preview')
+        
+        # Create a modified filter complex script with explicit scaling at the end
+        with open(filter_file, 'r') as f:
+            filter_content = f.read()
+        
+        # Replace the output label [outv] with an intermediate label [outv_unscaled]
+        modified_content = filter_content.replace("[outv];", "[outv_unscaled];")
+        modified_content = modified_content.replace("copy[outv];", "copy[outv_unscaled];")
+        modified_content = modified_content.replace("[outv]", "[outv_unscaled]")
+        
+        # Add a scaling step at the end for the preview
+        # This ensures we're not duplicating any stream labels or trying to use simple filter with complex filtergraph
+        scaling_line = "\n[outv_unscaled]scale=480:-1[outv];"
+        
+        # Add scaling before the audio concat line
+        audio_concat = a_stream + "concat=n=" + str(len(segments_to_keep)) + ":v=0:a=1[outa]"
+        modified_content = modified_content.replace(audio_concat, scaling_line + "\n" + audio_concat)
+        
+        # Save the modified filter complex
+        modified_filter_file = os.path.join(session_folder, "preview_filter_complex.txt")
+        with open(modified_filter_file, 'w') as f:
+            f.write(modified_content)
+        
+        # Build the FFmpeg command optimized for speed (without -vf scale)
         ffmpeg_cmd = [
             'ffmpeg', '-y', '-i', original_file, 
-            '-filter_complex_script', filter_file,
+            '-filter_complex_script', modified_filter_file,
             '-map', '[outv]', '-map', '[outa]',
-            '-vf', 'scale=640:-1', 
-            '-c:v', encoder['c:v']
+            '-c:v', encoder['c:v'],
+            '-threads', '0',  # Use maximum threads
+            '-g', '9999'  # Large GOP for faster encoding
         ]
         
         # Add encoder-specific settings
@@ -450,18 +523,32 @@ def edit_video():
         # Add extra parameters
         ffmpeg_cmd.extend(encoder['extra'])
         
-        # Add audio codec and output file
-        ffmpeg_cmd.extend(['-c:a', 'aac', '-b:a', '64k', preview_file])
+        # Add audio codec and output file with very low bitrate for speed
+        ffmpeg_cmd.extend(['-c:a', 'aac', '-b:a', '32k', preview_file])
         
         # Run FFmpeg
-        subprocess.run(ffmpeg_cmd, check=True)
-        
-        return jsonify({
-            'success': True,
-            'session_id': session_id,
-            'preview_file': preview_filename,
-            'zoom_events_applied': len(zoom_events) > 0
-        })
+        try:
+            subprocess.run(ffmpeg_cmd, check=True)
+            
+            # Cache the preview
+            if session_id not in app.config['PREVIEW_CACHE']:
+                app.config['PREVIEW_CACHE'][session_id] = {}
+            app.config['PREVIEW_CACHE'][session_id][selection_hash] = preview_filename
+            
+            return jsonify({
+                'success': True,
+                'session_id': session_id,
+                'preview_file': preview_filename,
+                'zoom_events_applied': len(zoom_events) > 0,
+                'cached': False
+            })
+            
+        except Exception as e:
+            print(f"Preview generation error: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate preview'
+            }), 500
     else:
         # Generate the full quality edited file
         edited_filename = f"edited_{filename}"
@@ -520,6 +607,12 @@ def edit_video():
         # Run FFmpeg for preview
         subprocess.run(ffmpeg_cmd2, check=True)
         
+        # Cache the preview for future use
+        selection_hash = hash(str(sorted_selections) + str(sorted_zoom_events))
+        if session_id not in app.config['PREVIEW_CACHE']:
+            app.config['PREVIEW_CACHE'][session_id] = {}
+        app.config['PREVIEW_CACHE'][session_id][selection_hash] = preview_filename
+        
         return jsonify({
             'success': True,
             'session_id': session_id,
@@ -572,9 +665,23 @@ def cleanup_session(session_id):
     session_path = os.path.join(app.config['PROCESSED_FOLDER'], session_id)
     if os.path.isdir(session_path):
         shutil.rmtree(session_path)
+        # Also clear any cached previews for this session
+        if session_id in app.config['PREVIEW_CACHE']:
+            del app.config['PREVIEW_CACHE'][session_id]
         return jsonify({'success': True, 'message': 'Session data cleared successfully'})
     else:
         return jsonify({'success': False, 'error': 'Session not found'}), 404
+
+# Preview cuts endpoint - optimized for speed
+@app.route('/preview_cuts', methods=['POST'])
+def preview_cuts():
+    data = request.json
+    
+    # Add the preview_only flag and call the existing edit function
+    data['preview_only'] = True
+    
+    # Call the main edit function with preview_only=True
+    return edit_video()
 
 if __name__ == '__main__':
     app.run(debug=True)
