@@ -40,6 +40,10 @@
                 <div class="editor-container">
                     <div class="left-panel">
                         <div class="video-container">
+                            <div class="video-tabs">
+                                <button id="original-tab" class="video-tab active">Original (High Quality)</button>
+                                <button id="preview-tab" class="video-tab" disabled>Preview (Low Quality)</button>
+                            </div>
                             <div id="video-wrapper" class="video-wrapper">
                                 <video id="video-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" width="100%" height="100%">
                                     <p class="vjs-no-js">
@@ -48,6 +52,16 @@
                                     </p>
                                 </video>
                                 <div id="mouse-indicator" class="mouse-indicator"></div>
+                            </div>
+                            <div id="preview-wrapper" class="video-wrapper" style="display: none;">
+                                <div class="preview-label">Preview Mode - Edited Video</div>
+                                <video id="preview-player" class="video-js vjs-default-skin vjs-big-play-centered" controls preload="auto" width="100%" height="100%">
+                                    <p class="vjs-no-js">
+                                        To view this video please enable JavaScript, and consider upgrading to a
+                                        web browser that supports HTML5 video
+                                    </p>
+                                </video>
+                                <div id="preview-mouse-indicator" class="mouse-indicator"></div>
                             </div>
                         </div>
                         
@@ -76,6 +90,13 @@
                         <div class="controls">
                             <button id="select-btn" class="btn btn-outline-primary">🪄 Select Text</button>
                             <button id="clear-btn" class="btn btn-outline-secondary">🧹 Clear Selections</button>
+                            <button id="preview-btn" class="btn btn-info">👁️ Preview Cuts</button>
+                            <div class="auto-preview-toggle">
+                                <label for="auto-preview-toggle" class="form-check-label">
+                                    <input type="checkbox" id="auto-preview-toggle" class="form-check-input">
+                                    Auto-Preview
+                                </label>
+                            </div>
                             <button id="download-btn" class="btn btn-success">✂️ Create & Download Edited Video</button>
                             <button id="cleanup-btn" class="btn btn-danger d-none">🗑️ Clear Server Data</button>
                         </div>
@@ -120,6 +141,12 @@
         <div class="progress">
             <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
         </div>
+    </div>
+    
+    <!-- Preview Status Indicator -->
+    <div id="preview-status" class="preview-status hidden">
+        <div class="preview-status-spinner"></div>
+        <span id="preview-status-text">Generating preview...</span>
     </div>
     
     <!-- Custom Context Menu -->

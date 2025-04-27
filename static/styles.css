@@ -1,3 +1,94 @@
+/* Preview label and styling */
+.preview-label {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Preview player status */
+.vjs-default-skin .vjs-time-control {
+    position: relative;
+}
+
+/* Highlight the edited timeline in preview mode */
+#preview-wrapper .vjs-progress-control .vjs-progress-holder {
+    background-color: rgba(244, 67, 54, 0.3);
+}
+
+#preview-wrapper .vjs-play-progress {
+    background-color: var(--accent);
+}
+/* Video Tabs */
+.video-tabs {
+    display: flex;
+    gap: 2px;
+    background-color: var(--light);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    overflow: hidden;
+    border-bottom: 2px solid var(--primary);
+}
+
+.video-tab {
+    padding: 10px 15px;
+    background-color: #e0e0e0;
+    border: none;
+    cursor: pointer;
+    flex-grow: 1;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.video-tab:hover:not(:disabled) {
+    background-color: #d0d0d0;
+}
+
+.video-tab.active {
+    background-color: var(--primary);
+    color: white;
+}
+
+.video-tab:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.video-tab::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background-color: var(--accent);
+    transition: width 0.2s ease;
+}
+
+.video-tab:hover::after:not(:disabled) {
+    width: 100%;
+}
+
+.video-tab.active::after {
+    width: 100%;
+}
+
+/* Video quality indicator on preview tab */
+.video-tab small {
+    display: block;
+    font-size: 0.7em;
+    opacity: 0.8;
+    font-weight: normal;
+}
+
 /* Base styles and variables */
 :root {
     --primary: #5e35b1;
@@ -227,6 +318,60 @@ h1::after {
     flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 20px;
+    align-items: center;
+}
+
+/* Auto-preview toggle */
+.auto-preview-toggle {
+    display: flex;
+    align-items: center;
+    background-color: #f0f0f0;
+    padding: 5px 10px;
+    border-radius: 20px;
+    margin-left: 10px;
+    font-size: 0.9rem;
+    border: 1px solid #ddd;
+}
+
+.auto-preview-toggle input[type="checkbox"] {
+    margin-right: 5px;
+}
+
+.preview-status {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    padding: 10px 15px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 5px;
+    z-index: 1000;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    transition: opacity 0.3s ease;
+}
+
+.preview-status.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.preview-status-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* Zoom Controls */

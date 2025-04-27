@@ -251,6 +251,7 @@ document.addEventListener('DOMContentLoaded', function() {
         player.on('loadedmetadata', handleLoadedMetadata);
         player.on('ended', handleEnded);
         player.on('error', handleError);
+        player.on('seeked', handleSeeked);
         
         // Custom event handlers for the video wrapper
         if (videoWrapper) {
@@ -629,7 +630,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const timeUpdateEvent = new CustomEvent('video-time-update', {
             detail: {
                 currentTime: player.currentTime(),
-                duration: player.duration() || 0
+                duration: player.duration() || 0,
+                source: 'original' // Specify this is from the original player
             }
         });
         document.dispatchEvent(timeUpdateEvent);
@@ -680,6 +682,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         document.dispatchEvent(errorEvent);
+    }
+    
+    /**
+     * Handle video seeked event (when seeking completes)
+     */
+    function handleSeeked() {
+        if (!player) return;
+        
+        const currentTime = player.currentTime();
+        console.log('Original player seeked to:', currentTime);
+        
+        // Dispatch a custom event for the app to use
+        const seekedEvent = new CustomEvent('video-time-update', {
+            detail: {
+                currentTime: currentTime,
+                duration: player.duration() || 0,
+                source: 'original',
+                isSeeked: true // Indicate this is from a seek operation
+            }
+        });
+        document.dispatchEvent(seekedEvent);
+        
+        // Update timeline cursor position
+        updateTimelineCursor();
     }
     
     /**
@@ -813,6 +839,105 @@ document.addEventListener('DOMContentLoaded', function() {
         pause: function() {
             if (player) player.pause();
         },
-        toggleZoomRecording: toggleZoomRecording
+        toggleZoomRecording: toggleZoomRecording,
+        // Convert time from original video to preview video (accounting for cuts)
+        mapTimeToPreview: function(originalTime, selections) {
+            if (!selections || selections.length === 0) return originalTime;
+            
+            // Ensure originalTime is a number
+            originalTime = parseFloat(originalTime);
+            if (isNaN(originalTime)) return 0;
+            
+            // Calculate time shift based on cuts before this point
+            let timeShift = 0;
+            
+            // Sort selections by start time
+            const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
+            
+            // For each cut selection before or overlapping our target time
+            for (const cut of sortedSelections) {
+                // Ensure cut times are numbers
+                const cutStart = parseFloat(cut.start);
+                const cutEnd = parseFloat(cut.end);
+                
+                if (isNaN(cutStart) || isNaN(cutEnd)) {
+                    console.warn('Invalid cut selection times:', cut);
+                    continue;
+                }
+                
+                if (cutStart >= originalTime) {
+                    // This cut is entirely after our target time
+                    break;
+                }
+                
+                if (cutEnd <= originalTime) {
+                    // This cut is entirely before our target time
+                    // Subtract its duration from our time
+                    timeShift += (cutEnd - cutStart);
+                } else if (cutStart < originalTime && cutEnd > originalTime) {
+                    // Our target time falls within this cut
+                    // Map to the start of the cut
+                    console.log(`Time ${originalTime} falls within cut at ${cutStart}-${cutEnd}, mapping to ${cutStart - timeShift}`);
+                    return Math.max(0, cutStart - timeShift);
+                }
+            }
+            
+            // Adjust the time by subtracting all cuts before it
+            const result = Math.max(0, originalTime - timeShift);
+            console.log(`Mapped original time ${originalTime} to preview time ${result} (shift: ${timeShift})`);
+            return result;
+        },
+        
+        // Convert time from preview video to original video (accounting for cuts)
+        mapTimeFromPreview: function(previewTime, selections) {
+            if (!selections || selections.length === 0) return previewTime;
+            
+            // Ensure previewTime is a number
+            previewTime = parseFloat(previewTime);
+            if (isNaN(previewTime)) return 0;
+            
+            // Sort selections by start time
+            const sortedSelections = [...selections].sort((a, b) => a.start - b.start);
+            
+            // Track time in the original timeline
+            let originalTime = previewTime;
+            
+            // Track how much time we've added so far
+            let timeAdded = 0;
+            
+            try {
+                // For each cut selection, adjust the time
+                for (const cut of sortedSelections) {
+                    // Ensure cut times are numbers
+                    const cutStart = parseFloat(cut.start);
+                    const cutEnd = parseFloat(cut.end);
+                    
+                    if (isNaN(cutStart) || isNaN(cutEnd)) {
+                        console.warn('Invalid cut selection times:', cut);
+                        continue;
+                    }
+                    
+                    // Check if the preview time is at or after the adjusted cut start
+                    if (originalTime >= cutStart - timeAdded) {
+                        // Add the duration of this cut to our original time
+                        const cutDuration = cutEnd - cutStart;
+                        originalTime += cutDuration;
+                        
+                        // Keep track of time we've added so far
+                        timeAdded += cutDuration;
+                        console.log(`Added cut duration ${cutDuration}s, timeAdded now ${timeAdded}s`);
+                    } else {
+                        // This cut is after our target time, no need to adjust further
+                        break;
+                    }
+                }
+                
+                console.log(`Mapped preview time ${previewTime} to original time ${originalTime} (added: ${timeAdded})`);
+                return Math.max(0, originalTime);
+            } catch (error) {
+                console.error('Error in mapTimeFromPreview:', error);
+                return previewTime; // Fallback to original time if error
+            }
+        }
     };
 });
