@@ -577,9 +577,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 break;
                 
             case HOTKEYS.Z:
-                // No need to cycle through modes, just reset zoom
-                resetZoom();
-                e.preventDefault();
+                // Only reset zoom if event occurred in video wrapper
+                if (e.target.closest('#video-wrapper')) {
+                    resetZoom();
+                    e.preventDefault();
+                }
                 break;
                 
             case HOTKEYS.R:
@@ -819,6 +821,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setZoomMode: setZoomMode,
         getZoomMode: function() { return currentZoomMode; },
         resetZoom: resetZoom,
+        getZoomPoint: function() { return { ...zoomPoint }; }, // Return a copy of zoomPoint
         applyZoom: function(level, point) {
             if (level) zoomLevel = level;
             if (point) zoomPoint = point;

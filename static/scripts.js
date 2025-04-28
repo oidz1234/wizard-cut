@@ -53,6 +53,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewStatus = document.getElementById('preview-status');
     const previewStatusText = document.getElementById('preview-status-text');
     
+    // Help modal elements
+    const helpBtn = document.getElementById('help-btn');
+    const helpModal = document.getElementById('help-modal');
+    const helpClose = document.querySelector('.help-close');
+    
     // Zoom control elements
     const zoomInBtn = document.getElementById('zoom-in-btn');
     const zoomOutBtn = document.getElementById('zoom-out-btn');
@@ -219,9 +224,29 @@ document.addEventListener('DOMContentLoaded', function() {
     // Context menu setup
     transcriptContainer.addEventListener('contextmenu', handleContextMenu);
     contextMenuCut.addEventListener('click', markSelectionForCut);
+    document.getElementById('context-menu-zoom').addEventListener('click', addZoomToSelection);
     document.addEventListener('click', hideContextMenu);
     
-    // Keyboard shortcut for marking text to cut
+    // Help modal event listeners
+    helpBtn.addEventListener('click', () => {
+        helpModal.style.display = 'block';
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    });
+
+    helpClose.addEventListener('click', () => {
+        helpModal.style.display = 'none';
+        document.body.style.overflow = 'auto'; // Restore scrolling
+    });
+
+    // Close when clicking outside the modal content
+    window.addEventListener('click', (e) => {
+        if (e.target === helpModal) {
+            helpModal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    });
+    
+    // Keyboard shortcuts for marking text to cut and adding zoom level
     document.addEventListener('keydown', function(e) {
         // Let the videoJsIntegration handle video-related shortcuts
         if (e.target.closest('#video-wrapper')) return;
@@ -233,6 +258,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (selection.toString().trim() !== '') {
                 markSelectionForCut();
                 e.preventDefault(); // Prevent default 'x' action
+            }
+        }
+        
+        // 'z' key for adding zoom level to selected text (when not in video player)
+        if (e.key === 'z' || e.key === 'Z') {
+            // Get the current text selection
+            const selection = window.getSelection();
+            if (selection.toString().trim() !== '') {
+                addZoomToSelection();
+                e.preventDefault(); // Prevent default 'z' action
             }
         }
     });
@@ -1184,6 +1219,180 @@ document.addEventListener('DOMContentLoaded', function() {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    /**
+     * Add current zoom level to the selected text
+     */
+    function addZoomToSelection() {
+        // Get the current text selection
+        const selection = window.getSelection();
+        if (selection.toString().trim() === '') return;
+        
+        // Find the start and end word elements
+        let startNode = selection.anchorNode;
+        let endNode = selection.focusNode;
+        
+        // If we're on text nodes, get their parent elements
+        if (startNode.nodeType === Node.TEXT_NODE) {
+            startNode = startNode.parentElement;
+        }
+        if (endNode.nodeType === Node.TEXT_NODE) {
+            endNode = endNode.parentElement;
+        }
+        
+        // Find the word elements that contain the start and end points
+        let startWordEl = startNode.closest('.word') || startNode.closest('.silence-marker');
+        let endWordEl = endNode.closest('.word') || endNode.closest('.silence-marker');
+        
+        // If we didn't find valid word elements, exit
+        if (!startWordEl || !endWordEl) return;
+        
+        // Get the indices
+        const startIdx = parseInt(startWordEl.dataset.index);
+        const endIdx = parseInt(endWordEl.dataset.index);
+        
+        // Make sure we have the start and end in the right order
+        const minIdx = Math.min(startIdx, endIdx);
+        const maxIdx = Math.max(startIdx, endIdx);
+        
+        // Get the current zoom level from video integration
+        let currentZoomLevel, focusPoint;
+        
+        if (window.videoJsIntegration) {
+            // Get zoom level directly from the integration
+            const videoElement = document.querySelector('.video-js video');
+            if (videoElement) {
+                const transform = getComputedStyle(videoElement).transform;
+                if (transform && transform !== 'none') {
+                    const matrix = transform.match(/matrix\(([^)]+)\)/);
+                    if (matrix && matrix[1]) {
+                        currentZoomLevel = parseFloat(matrix[1].split(',')[0]) || 1.0;
+                    }
+                }
+            }
+            
+            if (!currentZoomLevel || currentZoomLevel < 1.1) {
+                currentZoomLevel = 1.5; // Use a default if no zoom is active
+            }
+            
+            // Always get focus point directly from the integration
+            focusPoint = window.videoJsIntegration.getZoomPoint();
+        } else {
+            // Fallbacks if integration isn't available
+            currentZoomLevel = 1.5;
+            focusPoint = { x: 0.5, y: 0.5 };
+        }
+        
+        // Get the timestamps from the transcript data
+        const startTime = parseFloat(transcriptData[minIdx].start);
+        const endTime = parseFloat(transcriptData[maxIdx].end);
+        
+        // Create a new zoom event
+        const zoomEvent = {
+            id: 'zoom-' + Date.now(),
+            startTime: startTime,
+            endTime: endTime,
+            startZoomLevel: currentZoomLevel,
+            endZoomLevel: currentZoomLevel,
+            focusPoint: focusPoint
+        };
+        
+        console.log('Created zoom event with focus point:', focusPoint);
+        
+        // Add to zoom events array
+        zoomEvents.push(zoomEvent);
+        
+        // Add zoom marker to transcript
+        addZoomMarkerToTranscript(zoomEvent);
+        
+        // Add zoom event to timeline
+        addZoomEventToTimeline(zoomEvent);
+        
+        // Update the zoom events list
+        updateZoomEventsList();
+        zoomEventsList.classList.remove('d-none');
+        
+        // Clear text selection
+        selection.removeAllRanges();
+        
+        // Hide context menu
+        hideContextMenu();
+        
+        // Generate preview if auto-preview is enabled and we have zoom events
+        if (isAutoPreviewEnabled) {
+            debouncePreviewGeneration();
+        }
+    }
+    
+    /**
+     * Get the current zoom level from the video player
+     * @returns {number} - Current zoom level or default 1.0
+     */
+    function getZoomLevelFromVideoPlayer() {
+        if (window.videoJsIntegration) {
+            // Try to get the zoom level from the video element transform style
+            const videoElement = document.querySelector('.video-js video');
+            if (videoElement) {
+                const transform = getComputedStyle(videoElement).transform;
+                if (transform && transform !== 'none') {
+                    const matrix = transform.match(/matrix\(([^)]+)\)/);
+                    if (matrix && matrix[1]) {
+                        return parseFloat(matrix[1].split(',')[0]) || 1.0;
+                    }
+                }
+            }
+        }
+        return 1.0; // Default zoom level
+    }
+    
+    /**
+     * Get the current focus point from the video player
+     * @returns {Object} - Current focus point {x, y} normalized (0-1)
+     */
+    function getCurrentFocusPoint() {
+        if (window.videoJsIntegration) {
+            // Get the focus point directly from videoJsIntegration
+            // This is more reliable than parsing CSS
+            if (typeof window.videoJsIntegration.getZoomPoint === 'function') {
+                const point = window.videoJsIntegration.getZoomPoint();
+                return point; // Use the point directly from the integration
+            }
+            
+            // Fallback to reading from CSS if getZoomPoint is not available
+            const videoElement = document.querySelector('.video-js video');
+            if (videoElement) {
+                const transformOrigin = getComputedStyle(videoElement).transformOrigin;
+                if (transformOrigin && transformOrigin !== '50% 50%') {
+                    const parts = transformOrigin.split(' ');
+                    if (parts.length >= 2) {
+                        // Convert from pixel or percentage values to normalized 0-1 values
+                        const x = parsePercentage(parts[0]) / 100;
+                        const y = parsePercentage(parts[1]) / 100;
+                        return { x, y };
+                    }
+                }
+            }
+        }
+        return { x: 0.5, y: 0.5 }; // Default center focus point
+    }
+    
+    /**
+     * Parse a CSS percentage or pixel value to a number
+     * @param {string} value - CSS value (e.g., "50%", "100px")
+     * @returns {number} - Numeric value
+     */
+    function parsePercentage(value) {
+        if (value.endsWith('%')) {
+            return parseFloat(value);
+        } else if (value.endsWith('px')) {
+            // For pixel values, we need to know the container size
+            // This is a simplification - in reality would need to measure the container
+            const videoWidth = window.videoJsIntegration.getPlayer().videoWidth() || 1920;
+            const pixels = parseFloat(value);
+            return (pixels / videoWidth) * 100;
+        }
+        return parseFloat(value);
     }
     
     function removeSelection(index) {

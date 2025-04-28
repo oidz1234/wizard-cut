@@ -90,6 +90,9 @@
                         <div class="controls">
                             <button id="select-btn" class="btn btn-outline-primary">🪄 Select Text</button>
                             <button id="clear-btn" class="btn btn-outline-secondary">🧹 Clear Selections</button>
+                            <button id="help-btn" class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-question-circle"></i> Help & Shortcuts
+                            </button>
                             <button id="preview-btn" class="btn btn-info">👁️ Preview Cuts</button>
                             <div class="auto-preview-toggle">
                                 <label for="auto-preview-toggle" class="form-check-label">
@@ -103,7 +106,7 @@
                         
                         <div class="keyboard-shortcuts">
                             <p><span class="shortcut-key">X</span> - Press to mark selected text for deletion</p>
-                            <p><span class="shortcut-key">Z</span> - Cycle zoom modes (drag/click/none)</p>
+                            <p><span class="shortcut-key">Z</span> - Press to add zoom level to selected text</p>
                             <p><span class="shortcut-key">R</span> - Start/stop recording zoom events</p>
                         </div>
                         
@@ -152,11 +155,70 @@
     <!-- Custom Context Menu -->
     <div id="custom-context-menu" class="custom-context-menu" style="display: none;">
         <div class="context-menu-item" id="context-menu-cut">Mark for Cutting</div>
+        <div class="context-menu-item" id="context-menu-zoom">Add Current Zoom Level</div>
     </div>
 
     <!-- External JavaScript files -->
     <script src="https://vjs.zencdn.net/8.3.0/video.min.js"></script>
     <script src="/static/video-js-integration.js"></script>
     <script src="/static/scripts.js"></script>
+    
+    <!-- Help Modal -->
+    <div id="help-modal" class="help-modal">
+        <div class="help-modal-content">
+            <span class="help-close">&times;</span>
+            <h2>🧙‍♂️ Keyboard Shortcuts & Tips</h2>
+            
+            <div class="help-section">
+                <h3>Shortcuts</h3>
+                <table class="shortcuts-table">
+                    <tr>
+                        <td><span class="shortcut-key">X</span></td>
+                        <td>Mark selected text for deletion</td>
+                    </tr>
+                    <tr>
+                        <td><span class="shortcut-key">Z</span></td>
+                        <td>Add current zoom level to selected text</td>
+                    </tr>
+                    <tr>
+                        <td><span class="shortcut-key">R</span></td>
+                        <td>Start/stop recording zoom events</td>
+                    </tr>
+                    <tr>
+                        <td><span class="shortcut-key">Space</span></td>
+                        <td>Play/pause video</td>
+                    </tr>
+                    <tr>
+                        <td><span class="shortcut-key">←</span><span class="shortcut-key">→</span></td>
+                        <td>Skip backward/forward 5 seconds</td>
+                    </tr>
+                    <tr>
+                        <td><span class="shortcut-key">,</span><span class="shortcut-key">.</span></td>
+                        <td>Frame-by-frame navigation</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="help-section">
+                <h3>Zoom Tips</h3>
+                <ul>
+                    <li><strong>Direct Zoom:</strong> Simply select text, then press <span class="shortcut-key">Z</span> or right-click → "Add Current Zoom Level"</li>
+                    <li><strong>No recording needed:</strong> Just set your zoom level with the zoom buttons before applying!</li>
+                    <li><strong>Adjust focus point:</strong> Drag the video while zoomed to change what's centered</li>
+                    <li><strong>Pro tip:</strong> Use zoom level 2.0-3.0 for best results</li>
+                </ul>
+            </div>
+            
+            <div class="help-section">
+                <h3>Editing Tips</h3>
+                <ul>
+                    <li>Use the timeline to navigate quickly through your video</li>
+                    <li>Cut unwanted segments by selecting text and pressing <span class="shortcut-key">X</span></li>
+                    <li>Use "Auto-Preview" for instant feedback</li>
+                    <li>Hover over zoom-highlighted text to see the zoom level</li>
+                </ul>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
