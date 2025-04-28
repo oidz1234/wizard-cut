@@ -2290,8 +2290,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // Update preview tab with duration info
                                 updatePreviewTabInfo();
                                 
-                                // Auto-switch to preview tab
-                                modalSwitchTab('preview');
+                                // Only switch to preview tab if this wasn't triggered by auto-preview
+                                if (!isAutoPreviewEnabled) {
+                                    modalSwitchTab('preview');
+                                }
                                 
                             } catch (err) {
                                 console.error("Error initializing preview player:", err);
@@ -2314,8 +2316,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         showPreviewStatus('Preview updated! Click Preview tab to view', 3000);
                         
-                        // Auto-switch to preview tab if already initialized
-                        modalSwitchTab('preview');
+                        // Only switch to preview tab if this wasn't triggered by auto-preview
+                        if (!isAutoPreviewEnabled) {
+                            modalSwitchTab('preview');
+                        }
                     }
                 }
                 
