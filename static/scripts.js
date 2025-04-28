@@ -21,6 +21,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Zoom and tracking state
     let zoomEvents = []; // Array to store zoom events
     
+    // Make zoomEvents accessible to videoJsIntegration
+    window.zoomEvents = zoomEvents;
+    
     // DOM Elements
     const dropArea = document.getElementById('drop-area');
     const fileInput = document.getElementById('file-input');
@@ -600,7 +603,23 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('video-metadata-loaded', handleVideoMetadataLoaded);
     
     // Zoom event recorded
-    document.addEventListener('zoom-event-recorded', handleZoomEventRecorded);
+    document.addEventListener('zoom-event-recorded', function(e) {
+        const { zoomEvent } = e.detail;
+        zoomEvents.push(zoomEvent);
+        window.zoomEvents = zoomEvents; // Keep global reference in sync
+        addZoomMarkerToTranscript(zoomEvent);
+        addZoomEventToTimeline(zoomEvent);
+        updateZoomEventsList();
+        zoomEventsList.classList.remove('d-none');
+    });
+    
+    // Listen for zoom event removal requests from the video integration
+    document.addEventListener('zoom-event-remove-request', (e) => {
+        const { zoomId } = e.detail;
+        if (zoomId) {
+            removeZoomEvent(zoomId);
+        }
+    });
     
     // Functions
     function handleDragOver(e) {
@@ -667,15 +686,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleVideoMetadataLoaded(e) {
         const { duration } = e.detail;
         updateTimelineScale(duration);
-    }
-    
-    function handleZoomEventRecorded(e) {
-        const { zoomEvent } = e.detail;
-        zoomEvents.push(zoomEvent);
-        addZoomMarkerToTranscript(zoomEvent);
-        addZoomEventToTimeline(zoomEvent);
-        updateZoomEventsList();
-        zoomEventsList.classList.remove('d-none');
     }
     
     // Calculate adjusted timestamps based on what's been cut
@@ -1287,6 +1297,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get the timestamps from the transcript data
         const startTime = parseFloat(transcriptData[minIdx].start);
         const endTime = parseFloat(transcriptData[maxIdx].end);
+        
+        // Check for overlapping zoom events and remove them
+        const overlappingZooms = [];
+        for (let i = 0; i < zoomEvents.length; i++) {
+            const existingZoom = zoomEvents[i];
+            // Check if there's any overlap between the time ranges
+            if (!(existingZoom.endTime <= startTime || existingZoom.startTime >= endTime)) {
+                overlappingZooms.push(existingZoom.id);
+            }
+        }
+        
+        // Remove any overlapping zooms
+        if (overlappingZooms.length > 0) {
+            console.log(`Removing ${overlappingZooms.length} overlapping zoom events`);
+            for (const zoomId of overlappingZooms) {
+                removeZoomEvent(zoomId);
+            }
+        }
         
         // Create a new zoom event
         const zoomEvent = {
@@ -2087,9 +2115,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    /**
+     * Remove a zoom event by ID
+     * @param {string} id - The ID of the zoom event to remove
+     */
     function removeZoomEvent(id) {
         // Remove from the array
         zoomEvents = zoomEvents.filter(event => event.id !== id);
+        
+        // Also update the global reference
+        window.zoomEvents = zoomEvents;
         
         // Remove highlighting from transcript words
         const highlightedWords = document.querySelectorAll(`.word[data-zoom-id="${id}"], .silence-marker[data-zoom-id="${id}"]`);
@@ -2113,6 +2148,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Hide the list if there are no events
         if (zoomEvents.length === 0) {
             zoomEventsList.classList.add('d-none');
+        }
+        
+        // Generate preview if auto-preview is enabled
+        if (isAutoPreviewEnabled) {
+            debouncePreviewGeneration();
         }
     }
     

@@ -302,6 +302,26 @@ def edit_video():
     # Process zoom events
     sorted_zoom_events = sorted(zoom_events, key=lambda x: x['startTime'])
     
+    # Remove any overlapping zoom events - keep only the latest one in case of overlap
+    non_overlapping_zoom_events = []
+    for zoom in sorted_zoom_events:
+        # Check if this zoom overlaps with any zoom we've already kept
+        is_overlapping = False
+        for i, kept_zoom in enumerate(non_overlapping_zoom_events):
+            # Check for overlap
+            if not (zoom['endTime'] <= kept_zoom['startTime'] or zoom['startTime'] >= kept_zoom['endTime']):
+                # If this is a newer zoom (likely added later), replace the old one
+                if 'id' in zoom and 'id' in kept_zoom and zoom['id'] > kept_zoom['id']:
+                    non_overlapping_zoom_events[i] = zoom
+                is_overlapping = True
+                break
+        
+        if not is_overlapping:
+            non_overlapping_zoom_events.append(zoom)
+    
+    # Use the non-overlapping zoom events for further processing
+    sorted_zoom_events = sorted(non_overlapping_zoom_events, key=lambda x: x['startTime'])
+    
     # Save zoom events to file for debugging and reference
     zoom_events_path = os.path.join(session_folder, "zoom_events.json")
     with open(zoom_events_path, 'w') as f:
@@ -449,8 +469,7 @@ def edit_video():
                 f.write(f"[vconcated]copy[outv];\n")
         else:
             # No zoom, just use concatenated segments
-            # For consistency, use the same intermediate label as the zoom path
-            f.write(f"{v_stream}concat=n={len(segments_to_keep)}:v=1:a=0[vconcated];\n")
+            # No need to recreate the concatenated stream, just use it directly
             f.write(f"[vconcated]copy[outv];\n")
         
         # Add audio stream concatenation

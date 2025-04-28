@@ -768,6 +768,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Only add if duration is meaningful
                 if (currentZoomEvent.endTime > currentZoomEvent.startTime) {
+                    // Check for overlapping zoom events
+                    const isOverlapping = window.zoomEvents && window.zoomEvents.some(existingZoom => {
+                        return !(
+                            existingZoom.endTime <= currentZoomEvent.startTime || 
+                            existingZoom.startTime >= currentZoomEvent.endTime
+                        );
+                    });
+                    
+                    if (isOverlapping) {
+                        // If we access the zoomEvents array directly, we can remove overlapping zooms
+                        if (window.zoomEvents) {
+                            const overlappingZooms = window.zoomEvents.filter(existingZoom => {
+                                return !(
+                                    existingZoom.endTime <= currentZoomEvent.startTime || 
+                                    existingZoom.startTime >= currentZoomEvent.endTime
+                                );
+                            });
+                            
+                            // Remove overlapping zooms via UI events
+                            for (const zoom of overlappingZooms) {
+                                const removeEvent = new CustomEvent('zoom-event-remove-request', {
+                                    detail: { zoomId: zoom.id }
+                                });
+                                document.dispatchEvent(removeEvent);
+                            }
+                        }
+                    }
+                    
                     // Dispatch event to add the zoom event
                     const zoomEvent = new CustomEvent('zoom-event-recorded', {
                         detail: {
